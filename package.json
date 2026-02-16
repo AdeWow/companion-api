@@ -1,0 +1,27 @@
+{
+  "name": "companion-api",
+  "version": "0.1.0",
+  "description": "Backend API for Prolific Companion mobile app",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "fastify": "^5",
+    "@fastify/cors": "^10",
+    "@fastify/sensible": "^6",
+    "@supabase/supabase-js": "^2",
+    "bullmq": "^5",
+    "ioredis": "^5",
+    "jsonwebtoken": "^9",
+    "dotenv": "^16"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^22",
+    "@types/jsonwebtoken": "^9",
+    "tsx": "^4"
+  }
+}
