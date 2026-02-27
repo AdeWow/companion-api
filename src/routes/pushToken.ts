@@ -11,26 +11,19 @@ export default async function pushTokenRoutes(fastify: FastifyInstance) {
       const { token, platform } = request.body;
       const userId = request.userId;
 
-      if (!token || !platform) {
-        return reply.code(400).send({ error: 'Missing token or platform' });
+      if (!token) {
+        return reply.code(400).send({ error: 'Missing token' });
       }
 
-      if (platform !== 'ios' && platform !== 'android') {
-        return reply.code(400).send({ error: 'Platform must be "ios" or "android"' });
+      if (platform) {
+        fastify.log.info({ platform }, '[PUSH] Platform received (not stored yet)');
       }
 
-      // Upsert the push token for this user
+      // Upsert expo_push_token on companion_user_settings
       const { error } = await supabaseAdmin
-        .from('push_tokens')
-        .upsert(
-          {
-            user_id: userId,
-            token,
-            platform,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id' },
-        );
+        .from('companion_user_settings')
+        .update({ expo_push_token: token })
+        .eq('user_id', userId);
 
       if (error) {
         fastify.log.error({ error }, '[PUSH] Failed to save push token');

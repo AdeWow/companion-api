@@ -8,34 +8,52 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
     { preHandler: authMiddleware },
     async (request, reply) => {
       const userId = request.userId;
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-      // Fetch user profile + settings in parallel with today's daily log
-      const [userResult, dailyResult] = await Promise.all([
-        supabaseAdmin
-          .from('companion_user_settings')
-          .select('archetype, companion_name, wake_time, timezone')
-          .eq('user_id', userId)
-          .single(),
-        supabaseAdmin
-          .from('daily_logs')
-          .select('state, task_text, task_set_at, checkin_response')
-          .eq('user_id', userId)
-          .eq('date', today)
-          .single(),
-      ]);
+      // 1. Fetch user settings first (needed for timezone)
+      const settingsResult = await supabaseAdmin
+        .from('companion_user_settings')
+        .select('morning_time, evening_time, timezone, directiveness, weekend_mode')
+        .eq('user_id', userId)
+        .single();
 
-      if (userResult.error && userResult.error.code !== 'PGRST116') {
-        fastify.log.error({ error: userResult.error }, '[DAILY] Failed to fetch user settings');
+      if (settingsResult.error && settingsResult.error.code !== 'PGRST116') {
+        fastify.log.error({ error: settingsResult.error }, '[DAILY] Failed to fetch user settings');
         return reply.code(500).send({ error: 'Failed to fetch user settings' });
       }
 
-      // Build today object — null if no daily log exists (morning not yet triggered)
+      if (!settingsResult.data) {
+        return reply.code(404).send({ error: 'User settings not found' });
+      }
+
+      const settings = settingsResult.data;
+
+      // Compute today's date in the user's timezone
+      const tz = settings.timezone || 'UTC';
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+
+      // 2. Fetch archetype + today's daily log in parallel
+      const [archetypeResult, dailyResult] = await Promise.all([
+        supabaseAdmin
+          .from('quiz_results')
+          .select('archetype_result')
+          .eq('user_id', userId)
+          .order('completed_at', { ascending: false })
+          .limit(1)
+          .single(),
+        supabaseAdmin
+          .from('companion_daily_log')
+          .select('current_state, task_text, task_set_at, checkin_response')
+          .eq('user_id', userId)
+          .eq('log_date', today)
+          .single(),
+      ]);
+
+      // Build today object — null if no daily log exists
       let todayData = null;
       if (dailyResult.data) {
         todayData = {
           date: today,
-          state: dailyResult.data.state,
+          state: dailyResult.data.current_state,
           task_text: dailyResult.data.task_text,
           task_set_at: dailyResult.data.task_set_at,
           checkin_response: dailyResult.data.checkin_response,
@@ -43,18 +61,15 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       }
 
       // Build user object
-      const userData = userResult.data
-        ? {
-            archetype: userResult.data.archetype,
-            companion_name: userResult.data.companion_name,
-            wake_time: userResult.data.wake_time,
-            timezone: userResult.data.timezone,
-          }
-        : null;
+      const archetype = archetypeResult.data?.archetype_result ?? null;
 
       return {
         today: todayData,
-        user: userData,
+        user: {
+          archetype,
+          morning_time: settings.morning_time,
+          timezone: settings.timezone,
+        },
       };
     },
   );

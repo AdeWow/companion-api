@@ -9,19 +9,17 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "fastify": "^5",
     "@fastify/cors": "^10",
     "@fastify/sensible": "^6",
     "@supabase/supabase-js": "^2",
     "bullmq": "^5",
-    "ioredis": "^5",
-    "jsonwebtoken": "^9",
-    "dotenv": "^16"
+    "dotenv": "^16",
+    "fastify": "^5",
+    "ioredis": "^5"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^22",
-    "@types/jsonwebtoken": "^9",
-    "tsx": "^4"
+    "tsx": "^4",
+    "typescript": "^5"
   }
 }

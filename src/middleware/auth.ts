@@ -1,7 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!;
+import { supabaseAdmin } from '../lib/supabase';
 
 export async function authMiddleware(
   request: FastifyRequest,
@@ -13,19 +11,17 @@ export async function authMiddleware(
     return reply.code(401).send({ error: 'Missing authorization header' });
   }
 
-  const token = authHeader.slice(7); // Remove 'Bearer '
+  const token = authHeader.replace('Bearer ', '');
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET, {
-      algorithms: ['HS256'],
-    }) as jwt.JwtPayload;
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
 
-    if (!decoded.sub) {
-      return reply.code(401).send({ error: 'Invalid token: missing subject' });
+    if (error || !data.user) {
+      return reply.code(401).send({ error: 'Invalid or expired token' });
     }
 
-    request.userId = decoded.sub;
+    request.userId = data.user.id;
   } catch (err) {
-    return reply.code(401).send({ error: 'Invalid or expired token' });
+    return reply.code(401).send({ error: 'Authentication failed' });
   }
 }
