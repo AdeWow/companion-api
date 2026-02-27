@@ -6,6 +6,7 @@ import { closeRedis } from './lib/redis';
 import healthRoutes from './routes/health';
 import pushTokenRoutes from './routes/pushToken';
 import dailyRoutes from './routes/daily';
+import testPushRoutes from './routes/testPush';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
@@ -25,6 +26,7 @@ async function start() {
   await fastify.register(healthRoutes);
   await fastify.register(pushTokenRoutes);
   await fastify.register(dailyRoutes);
+  await fastify.register(testPushRoutes);
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
