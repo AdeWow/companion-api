@@ -7,19 +7,17 @@ import { selectMessage, renderMessage, logMessage, getRecentMessageIds } from '.
 
 interface MorningPromptJob {
   userId: string;
-  morningTime: string; // "08:00"
-  timezone: string;
 }
 
 async function processMorningPrompt(job: Job<MorningPromptJob>) {
-  const { userId, morningTime, timezone } = job.data;
+  const { userId } = job.data;
   console.log(`[MORNING] Processing for user ${userId}`);
 
-  // 1. Fetch user's push token, archetype, and directiveness
+  // 1. Fetch user's settings and archetype
   const [settingsResult, quizResult] = await Promise.all([
     supabaseAdmin
       .from('companion_user_settings')
-      .select('expo_push_token, directiveness')
+      .select('expo_push_token, directiveness, morning_time, timezone')
       .eq('user_id', userId)
       .single(),
     supabaseAdmin
@@ -34,14 +32,16 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
     return;
   }
 
-  const pushToken = settingsResult.data.expo_push_token;
+  const { expo_push_token: pushToken, directiveness: dir, morning_time: morningTime, timezone } = settingsResult.data;
   const archetype = quizResult.data?.archetype_result || 'universal';
-  const directiveness = settingsResult.data.directiveness || 'gentle';
+  const directiveness = dir || 'gentle';
 
   // 2. Select a message
   const recentIds = await getRecentMessageIds(userId, 'morning_opening');
   const template = selectMessage('morning_opening', archetype, directiveness, recentIds);
   const messageText = renderMessage(template, {});
+
+  const tz = timezone || 'America/New_York';
 
   // 3. Send push notification
   const result = await sendPushNotification({
@@ -57,7 +57,7 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
     await logMessage(userId, template.id, 'morning_opening');
 
     // 5. Create a placeholder daily task row
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
     await supabaseAdmin
       .from('companion_daily_tasks')
       .upsert({
@@ -90,50 +90,70 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
   }
 
   // 7. Schedule next morning prompt (tomorrow at the same time)
-  await scheduleMorningPrompt(userId, morningTime, timezone);
+  if (morningTime) {
+    await scheduleMorningPrompt(userId, morningTime, tz);
+  }
 }
 
-/**
- * Schedule a morning prompt for a user.
- * Calculates the delay until the next occurrence of morningTime in the user's timezone.
- */
 export async function scheduleMorningPrompt(
   userId: string,
   morningTime: string,
   timezone: string,
 ): Promise<void> {
   const queues = getQueues();
-  const jobId = `morning-${userId}`;
 
-  // Remove existing job if rescheduling
-  const existing = await queues.morningPrompt.getJob(jobId);
-  if (existing) await existing.remove();
-
-  // Calculate delay until next morning time
   const [hours, minutes] = morningTime.split(':').map(Number);
+  if (isNaN(hours) || isNaN(minutes)) {
+    console.error(`[MORNING] Invalid morning_time format: "${morningTime}" for user ${userId}`);
+    return;
+  }
+
+  // Use Intl.DateTimeFormat to get the current time in the user's timezone
   const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0');
 
-  // Create a date in the user's timezone for today's morning time
-  const todayStr = now.toLocaleDateString('en-CA', { timeZone: timezone });
-  const targetLocal = new Date(`${todayStr}T${morningTime}:00`);
+  const nowInTzHours = getPart('hour');
+  const nowInTzMinutes = getPart('minute');
+  const nowInTzTotalMinutes = nowInTzHours * 60 + nowInTzMinutes;
+  const targetTotalMinutes = hours * 60 + minutes;
 
-  // Convert to the user's local time perspective
-  const nowInTz = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-  let delayMs: number;
+  // Calculate minutes until next occurrence
+  let minutesUntil = targetTotalMinutes - nowInTzTotalMinutes;
+  if (minutesUntil <= 0) {
+    minutesUntil += 24 * 60; // Tomorrow
+  }
 
-  if (targetLocal > nowInTz) {
-    // Morning time hasn't passed today
-    delayMs = targetLocal.getTime() - nowInTz.getTime();
-  } else {
-    // Morning time already passed — schedule for tomorrow
-    const tomorrowTarget = new Date(targetLocal);
-    tomorrowTarget.setDate(tomorrowTarget.getDate() + 1);
-    delayMs = tomorrowTarget.getTime() - nowInTz.getTime();
+  const delayMs = minutesUntil * 60 * 1000;
+
+  // Safety check
+  if (!isFinite(delayMs) || delayMs < 0) {
+    console.error(`[MORNING] Invalid delay calculated: ${delayMs}ms for user ${userId}`);
+    return;
+  }
+
+  const tomorrow = new Date(now.getTime() + delayMs);
+  const jobId = `morning-${userId}-${tomorrow.toISOString().split('T')[0]}`;
+
+  // Remove any existing job to avoid duplicates
+  const existing = await queues.morningPrompt.getJob(jobId);
+  if (existing) {
+    await existing.remove();
   }
 
   await queues.morningPrompt.add(
     jobId,
-    { userId, morningTime, timezone },
+    { userId },
     {
       delay: delayMs,
       jobId,
@@ -143,7 +163,7 @@ export async function scheduleMorningPrompt(
   );
 
   const delayHours = (delayMs / (1000 * 60 * 60)).toFixed(1);
-  console.log(`[MORNING] Scheduled for user ${userId} in ${delayHours}h`);
+  console.log(`[MORNING] Scheduled for user ${userId} in ${delayHours}h (${morningTime} ${timezone})`);
 }
 
 export function startMorningWorker() {
