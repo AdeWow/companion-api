@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { supabaseAdmin } from '../lib/supabase';
 import { getRedis } from '../lib/redis';
+import { getQueues } from '../lib/queue';
 import type { HealthResponse } from '../types';
 
 export default async function healthRoutes(fastify: FastifyInstance) {
@@ -24,6 +25,19 @@ export default async function healthRoutes(fastify: FastifyInstance) {
       supabaseStatus = 'error';
     }
 
+    // Check queue status
+    let queueStatus = 'not_available';
+    if (redis) {
+      try {
+        const queues = getQueues();
+        const waiting = await queues.morningPrompt.getWaitingCount();
+        const delayed = await queues.morningPrompt.getDelayedCount();
+        queueStatus = `ok (${waiting} waiting, ${delayed} delayed)`;
+      } catch {
+        queueStatus = 'error';
+      }
+    }
+
     const response: HealthResponse = {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -31,6 +45,7 @@ export default async function healthRoutes(fastify: FastifyInstance) {
       services: {
         redis: redisStatus,
         supabase: supabaseStatus,
+        queues: queueStatus,
       },
     };
 

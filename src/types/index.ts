@@ -21,6 +21,7 @@ export interface HealthResponse {
   services: {
     redis: 'connected' | 'disconnected' | 'not_configured';
     supabase: 'connected' | 'error';
+    queues: string;
   };
 }
 

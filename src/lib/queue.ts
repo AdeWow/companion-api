@@ -1,27 +1,25 @@
-import { Queue, type ConnectionOptions } from 'bullmq';
-import { getRedis } from './redis';
+import { Queue } from 'bullmq';
+import { getRedisConnection } from './redis';
 
-// Queue names — these match the job types in the technical architecture
 export const QUEUE_NAMES = {
   MORNING_PROMPT: 'morning-prompt',
   CHECKIN_REMINDER: 'checkin-reminder',
-  EVENING_REFLECTION: 'evening-reflection',
-  FOLLOW_UP: 'follow-up',
+  EXPIRATION: 'expiration',
 } as const;
 
-let morningQueue: Queue | null = null;
-let checkinQueue: Queue | null = null;
+let queues: Record<string, Queue> | null = null;
 
 export function getQueues() {
-  const redis = getRedis();
-  if (!redis) return null;
+  if (queues) return queues;
 
-  if (!morningQueue) {
-    const opts = { connection: redis as unknown as ConnectionOptions };
-    morningQueue = new Queue(QUEUE_NAMES.MORNING_PROMPT, opts);
-    checkinQueue = new Queue(QUEUE_NAMES.CHECKIN_REMINDER, opts);
-    console.log('[QUEUE] Queues initialized');
-  }
+  const connection = getRedisConnection() as any;
 
-  return { morningQueue, checkinQueue };
+  queues = {
+    morningPrompt: new Queue(QUEUE_NAMES.MORNING_PROMPT, { connection }),
+    checkinReminder: new Queue(QUEUE_NAMES.CHECKIN_REMINDER, { connection }),
+    expiration: new Queue(QUEUE_NAMES.EXPIRATION, { connection }),
+  };
+
+  console.log('[QUEUE] All queues initialized');
+  return queues;
 }

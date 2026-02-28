@@ -2,11 +2,17 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
-import { closeRedis } from './lib/redis';
+import { getRedis, closeRedis } from './lib/redis';
 import healthRoutes from './routes/health';
 import pushTokenRoutes from './routes/pushToken';
 import dailyRoutes from './routes/daily';
 import testPushRoutes from './routes/testPush';
+import taskRoutes from './routes/task';
+import checkinRoutes from './routes/checkin';
+import scheduleRoutes from './routes/schedule';
+import { startMorningWorker } from './workers/morningPrompt';
+import { startCheckinWorker } from './workers/checkinReminder';
+import { startExpirationWorker } from './workers/expiration';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
@@ -27,6 +33,9 @@ async function start() {
   await fastify.register(pushTokenRoutes);
   await fastify.register(dailyRoutes);
   await fastify.register(testPushRoutes);
+  await fastify.register(taskRoutes);
+  await fastify.register(checkinRoutes);
+  await fastify.register(scheduleRoutes);
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
@@ -46,6 +55,21 @@ async function start() {
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
+  }
+
+  // Start BullMQ workers (only if Redis is available)
+  try {
+    const redis = getRedis();
+    if (redis) {
+      startMorningWorker();
+      startCheckinWorker();
+      startExpirationWorker();
+      console.log('[SERVER] All workers started');
+    } else {
+      console.warn('[SERVER] Redis not available — workers not started');
+    }
+  } catch (err) {
+    console.error('[SERVER] Failed to start workers:', err);
   }
 }
 
