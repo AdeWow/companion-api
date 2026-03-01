@@ -104,6 +104,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
             postCompletion: config.postCompletion,
             lowEnergyOptOut: config.lowEnergyOptOut,
             idleAllowsNewTask: config.idleAllowsNewTask,
+            dailySummaryStyle: config.dailySummaryStyle,
           },
         },
       };
