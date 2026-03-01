@@ -54,7 +54,13 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         .single();
 
       if (error) {
-        console.error('[TASK] Rest day upsert failed:', error);
+        console.error('[TASK] Rest day upsert failed:', JSON.stringify({
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          payload: { user_id: userId, task_date: today, status: 'rest', energy_level: energyLevel || null, is_rest_day: true },
+        }));
         return reply.status(500).send({ error: 'Failed to save rest day' });
       }
 
