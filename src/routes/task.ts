@@ -2,38 +2,61 @@ import { FastifyInstance } from 'fastify';
 import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
 import { getQueues } from '../lib/queue';
+import { getArchetypeConfig } from '../config/archetypeConfig';
 
 export default async function taskRoutes(fastify: FastifyInstance) {
-  // POST /task — User sets their daily task
+  // POST /task — User sets their daily task(s)
   fastify.post('/task', {
     preHandler: authMiddleware,
   }, async (request, reply) => {
     const userId = request.userId;
-    const { taskText, checkinOffsetHours, energyLevel, isRestDay } = request.body as {
+    const body = request.body as {
       taskText?: string;
-      checkinOffsetHours?: number; // Hours from now until check-in (default: 4)
-      energyLevel?: string; // 'high', 'medium', 'low'
+      tasks?: string[];
+      checkinOffsetHours?: number;
+      energyLevel?: string;
       isRestDay?: boolean;
     };
+
+    const { checkinOffsetHours, energyLevel, isRestDay } = body;
 
     // Validate energyLevel if provided
     if (energyLevel && !['high', 'medium', 'low'].includes(energyLevel)) {
       return reply.status(400).send({ error: 'energyLevel must be high, medium, or low' });
     }
 
-    // taskText is required unless it's a rest day
-    if (!isRestDay && (!taskText || taskText.trim().length === 0)) {
+    // Normalize tasks array (backward compatible)
+    let tasks: string[];
+    if (Array.isArray(body.tasks)) {
+      tasks = body.tasks.map(t => t.trim()).filter(t => t.length > 0);
+    } else if (body.taskText) {
+      tasks = [body.taskText.trim()].filter(t => t.length > 0);
+    } else {
+      tasks = [];
+    }
+
+    // taskText/tasks is required unless it's a rest day
+    if (!isRestDay && tasks.length === 0) {
       return reply.status(400).send({ error: 'taskText is required' });
     }
 
-    // Fetch user's timezone so task_date matches GET /daily
-    const { data: settings } = await supabaseAdmin
-      .from('companion_user_settings')
-      .select('timezone')
-      .eq('user_id', userId)
-      .single();
+    // Fetch user's timezone and archetype in parallel
+    const [settingsRes, quizRes] = await Promise.all([
+      supabaseAdmin
+        .from('companion_user_settings')
+        .select('timezone')
+        .eq('user_id', userId)
+        .single(),
+      supabaseAdmin
+        .from('quiz_results')
+        .select('archetype')
+        .eq('user_id', userId)
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .single(),
+    ]);
 
-    const tz = settings?.timezone || 'America/New_York';
+    const tz = settingsRes.data?.timezone || 'America/New_York';
     const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
     const offsetHours = checkinOffsetHours || 4;
 
@@ -45,7 +68,11 @@ export default async function taskRoutes(fastify: FastifyInstance) {
           user_id: userId,
           task_date: today,
           task_text: null,
+          task_2_text: null,
+          task_3_text: null,
           status: 'rest',
+          task_2_status: null,
+          task_3_status: null,
           energy_level: energyLevel || null,
           is_rest_day: true,
           updated_at: new Date().toISOString(),
@@ -65,7 +92,6 @@ export default async function taskRoutes(fastify: FastifyInstance) {
       }
 
       // Do NOT schedule a check-in job for rest days
-      // Remove any existing check-in job in case task was previously set
       try {
         const queues = getQueues();
         const jobId = `checkin-${userId}-${today}`;
@@ -85,13 +111,29 @@ export default async function taskRoutes(fastify: FastifyInstance) {
     }
 
     // --- Normal task flow ---
+
+    // Validate task count against archetype maxTasks
+    const archetype = quizRes.data?.archetype || null;
+    const config = getArchetypeConfig(archetype);
+
+    if (tasks.length > config.maxTasks) {
+      return reply.status(400).send({
+        error: `Your archetype supports up to ${config.maxTasks} tasks`,
+      });
+    }
+
+    // Upsert today's task(s)
     const { data: task, error } = await supabaseAdmin
       .from('companion_daily_tasks')
       .upsert({
         user_id: userId,
         task_date: today,
-        task_text: taskText!.trim(),
+        task_text: tasks[0],
+        task_2_text: tasks[1] || null,
+        task_3_text: tasks[2] || null,
         status: 'pending',
+        task_2_status: tasks[1] ? 'pending' : null,
+        task_3_status: tasks[2] ? 'pending' : null,
         energy_level: energyLevel || null,
         is_rest_day: false,
         updated_at: new Date().toISOString(),
@@ -104,13 +146,12 @@ export default async function taskRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ error: 'Failed to save task' });
     }
 
-    // Schedule check-in reminder
+    // Schedule check-in reminder (one check-in for all tasks)
     try {
       const queues = getQueues();
       const checkinDelay = offsetHours * 60 * 60 * 1000;
       const jobId = `checkin-${userId}-${today}`;
 
-      // Remove existing check-in job if task is being updated
       const existing = await queues.checkinReminder.getJob(jobId);
       if (existing) await existing.remove();
 
@@ -119,7 +160,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         {
           userId,
           taskId: task.id,
-          taskText: taskText!.trim(),
+          taskText: tasks[0],
           date: today,
         },
         {
@@ -130,9 +171,8 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         }
       );
 
-      console.log(`[TASK] Task set for user ${userId}, check-in in ${offsetHours}h`);
+      console.log(`[TASK] ${tasks.length} task(s) set for user ${userId}, check-in in ${offsetHours}h`);
     } catch (queueErr) {
-      // Queue failure shouldn't break task creation
       console.error('[TASK] Failed to schedule check-in:', queueErr);
     }
 
@@ -141,6 +181,8 @@ export default async function taskRoutes(fastify: FastifyInstance) {
       task: {
         id: task.id,
         taskText: task.task_text,
+        task2Text: task.task_2_text || null,
+        task3Text: task.task_3_text || null,
         taskDate: task.task_date,
         status: task.status,
       },

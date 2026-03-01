@@ -41,7 +41,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           .single(),
         supabaseAdmin
           .from('companion_daily_tasks')
-          .select('id, task_text, task_date, status, morning_sent_at, checkin_sent_at, checkin_responded_at, energy_level, is_rest_day, created_at')
+          .select('id, task_text, task_date, status, morning_sent_at, checkin_sent_at, checkin_responded_at, energy_level, is_rest_day, task_2_text, task_2_status, task_3_text, task_3_status, created_at')
           .eq('user_id', userId)
           .eq('task_date', today)
           .single(),
@@ -64,6 +64,10 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           checkinRespondedAt: t.checkin_responded_at || null,
           energyLevel: t.energy_level || null,
           isRestDay: t.is_rest_day || false,
+          task2Text: t.task_2_text || null,
+          task2Status: t.task_2_status || null,
+          task3Text: t.task_3_text || null,
+          task3Status: t.task_3_status || null,
         };
       }
 
