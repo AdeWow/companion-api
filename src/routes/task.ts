@@ -18,7 +18,15 @@ export default async function taskRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'taskText is required' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // Fetch user's timezone so task_date matches GET /daily
+    const { data: settings } = await supabaseAdmin
+      .from('companion_user_settings')
+      .select('timezone')
+      .eq('user_id', userId)
+      .single();
+
+    const tz = settings?.timezone || 'America/New_York';
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
     const offsetHours = checkinOffsetHours || 4;
 
     // Upsert today's task

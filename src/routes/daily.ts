@@ -9,10 +9,10 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = request.userId;
 
-      // 1. Fetch user settings first (needed for timezone)
+      // 1. Fetch user settings (needed for timezone)
       const settingsResult = await supabaseAdmin
         .from('companion_user_settings')
-        .select('morning_time, evening_time, timezone, directiveness, weekend_mode')
+        .select('morning_time, timezone, directiveness')
         .eq('user_id', userId)
         .single();
 
@@ -26,13 +26,11 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       }
 
       const settings = settingsResult.data;
-
-      // Compute today's date in the user's timezone
-      const tz = settings.timezone || 'UTC';
+      const tz = settings.timezone || 'America/New_York';
       const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
 
-      // 2. Fetch archetype + today's daily log in parallel
-      const [archetypeResult, dailyResult] = await Promise.all([
+      // 2. Fetch archetype + today's daily task in parallel
+      const [archetypeResult, taskResult] = await Promise.all([
         supabaseAdmin
           .from('quiz_results')
           .select('archetype_result')
@@ -41,33 +39,42 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           .limit(1)
           .single(),
         supabaseAdmin
-          .from('companion_daily_log')
-          .select('current_state, task_text, task_set_at, checkin_response')
+          .from('companion_daily_tasks')
+          .select('id, task_text, task_date, status, morning_sent_at, checkin_sent_at, checkin_responded_at, created_at')
           .eq('user_id', userId)
-          .eq('log_date', today)
+          .eq('task_date', today)
           .single(),
       ]);
 
-      // Build today object — null if no daily log exists
-      let todayData = null;
-      if (dailyResult.data) {
-        todayData = {
-          date: today,
-          state: dailyResult.data.current_state,
-          task_text: dailyResult.data.task_text,
-          task_set_at: dailyResult.data.task_set_at,
-          checkin_response: dailyResult.data.checkin_response,
+      // Build task object — null if no task row exists for today
+      let task = null;
+      let morningSent = false;
+
+      if (taskResult.data) {
+        const t = taskResult.data;
+        morningSent = !!t.morning_sent_at;
+        task = {
+          id: t.id,
+          taskText: t.task_text || '',
+          taskDate: t.task_date,
+          status: t.status,
+          morningSentAt: t.morning_sent_at || null,
+          checkinSentAt: t.checkin_sent_at || null,
+          checkinRespondedAt: t.checkin_responded_at || null,
         };
       }
 
-      // Build user object
       const archetype = archetypeResult.data?.archetype_result ?? null;
 
       return {
-        today: todayData,
+        today: {
+          date: today,
+          task,
+          morningSent,
+        },
         user: {
           archetype,
-          morning_time: settings.morning_time,
+          morningTime: settings.morning_time,
           timezone: settings.timezone,
         },
       };
