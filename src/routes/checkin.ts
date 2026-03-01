@@ -11,15 +11,15 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
     const userId = request.userId;
     const { taskId, status } = request.body as {
       taskId: string;
-      status: 'done' | 'working' | 'not_started';
+      status: 'done' | 'working' | 'not_started' | 'switched';
     };
 
     if (!taskId || !status) {
       return reply.status(400).send({ error: 'taskId and status are required' });
     }
 
-    if (!['done', 'working', 'not_started'].includes(status)) {
-      return reply.status(400).send({ error: 'status must be done, working, or not_started' });
+    if (!['done', 'working', 'not_started', 'switched'].includes(status)) {
+      return reply.status(400).send({ error: 'status must be done, working, not_started, or switched' });
     }
 
     // Update task

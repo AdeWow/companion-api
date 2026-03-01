@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { authMiddleware } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
+import { getArchetypeConfig } from '../config/archetypeConfig';
 
 export default async function dailyRoutes(fastify: FastifyInstance) {
   fastify.get(
@@ -65,6 +66,18 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       }
 
       const archetype = archetypeResult.data?.archetype ?? null;
+      const config = getArchetypeConfig(archetype);
+
+      console.log('[DAILY] archetype:', archetype, 'config:', JSON.stringify({
+        maxTasks: config.maxTasks,
+        morningStyle: config.morningStyle,
+        taskFraming: config.taskFraming,
+        taskSizeCheck: config.taskSizeCheck,
+        checkinLabels: config.checkinLabels,
+        postCompletion: config.postCompletion,
+        lowEnergyOptOut: config.lowEnergyOptOut,
+        idleAllowsNewTask: config.idleAllowsNewTask,
+      }));
 
       return {
         today: {
@@ -76,6 +89,16 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           archetype,
           morningTime: settings.morning_time,
           timezone: settings.timezone,
+          config: {
+            maxTasks: config.maxTasks,
+            morningStyle: config.morningStyle,
+            taskFraming: config.taskFraming,
+            taskSizeCheck: config.taskSizeCheck,
+            checkinLabels: config.checkinLabels,
+            postCompletion: config.postCompletion,
+            lowEnergyOptOut: config.lowEnergyOptOut,
+            idleAllowsNewTask: config.idleAllowsNewTask,
+          },
         },
       };
     },
