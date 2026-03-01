@@ -33,7 +33,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       const [archetypeResult, taskResult] = await Promise.all([
         supabaseAdmin
           .from('quiz_results')
-          .select('archetype_result')
+          .select('archetype')
           .eq('user_id', userId)
           .order('completed_at', { ascending: false })
           .limit(1)
@@ -64,7 +64,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         };
       }
 
-      const archetype = archetypeResult.data?.archetype_result ?? null;
+      const archetype = archetypeResult.data?.archetype ?? null;
 
       return {
         today: {

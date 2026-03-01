@@ -53,11 +53,11 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
 
     const { data: quiz } = await supabaseAdmin
       .from('quiz_results')
-      .select('archetype_result')
+      .select('archetype')
       .eq('user_id', userId)
       .single();
 
-    const archetype = quiz?.archetype_result || 'universal';
+    const archetype = quiz?.archetype || 'universal';
 
     const { data: settings } = await supabaseAdmin
       .from('companion_user_settings')

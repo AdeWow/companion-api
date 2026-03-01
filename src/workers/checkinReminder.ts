@@ -37,7 +37,7 @@ async function processCheckinReminder(job: Job<CheckinReminderJob>) {
       .single(),
     supabaseAdmin
       .from('quiz_results')
-      .select('archetype_result')
+      .select('archetype')
       .eq('user_id', userId)
       .single(),
   ]);
@@ -48,7 +48,7 @@ async function processCheckinReminder(job: Job<CheckinReminderJob>) {
   }
 
   const pushToken = settingsResult.data.expo_push_token;
-  const archetype = quizResult.data?.archetype_result || 'universal';
+  const archetype = quizResult.data?.archetype || 'universal';
   const directiveness = settingsResult.data.directiveness || 'gentle';
 
   // 3. Select a message

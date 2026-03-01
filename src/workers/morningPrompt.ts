@@ -22,7 +22,7 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
       .single(),
     supabaseAdmin
       .from('quiz_results')
-      .select('archetype_result')
+      .select('archetype')
       .eq('user_id', userId)
       .single(),
   ]);
@@ -33,7 +33,7 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
   }
 
   const { expo_push_token: pushToken, directiveness: dir, morning_time: morningTime, timezone } = settingsResult.data;
-  const archetype = quizResult.data?.archetype_result || 'universal';
+  const archetype = quizResult.data?.archetype || 'universal';
   const directiveness = dir || 'gentle';
 
   // 2. Select a message
