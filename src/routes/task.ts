@@ -16,13 +16,19 @@ export default async function taskRoutes(fastify: FastifyInstance) {
       checkinOffsetHours?: number;
       energyLevel?: string;
       isRestDay?: boolean;
+      contextMode?: string;
     };
 
-    const { checkinOffsetHours, energyLevel, isRestDay } = body;
+    const { checkinOffsetHours, energyLevel, isRestDay, contextMode } = body;
 
     // Validate energyLevel if provided
     if (energyLevel && !['high', 'medium', 'low'].includes(energyLevel)) {
       return reply.status(400).send({ error: 'energyLevel must be high, medium, or low' });
+    }
+
+    // Validate contextMode if provided
+    if (contextMode && !['execution', 'creative', 'planning', 'low_energy'].includes(contextMode)) {
+      return reply.status(400).send({ error: 'contextMode must be execution, creative, planning, or low_energy' });
     }
 
     // Normalize tasks array (backward compatible)
@@ -75,6 +81,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
           task_3_status: null,
           energy_level: energyLevel || null,
           is_rest_day: true,
+          context_mode: contextMode || null,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id,task_date' })
         .select()
@@ -136,6 +143,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         task_3_status: tasks[2] ? 'pending' : null,
         energy_level: energyLevel || null,
         is_rest_day: false,
+        context_mode: contextMode || null,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,task_date' })
       .select()
