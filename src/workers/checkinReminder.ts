@@ -19,12 +19,18 @@ async function processCheckinReminder(job: Job<CheckinReminderJob>) {
   // 1. Verify the task still exists and is pending
   const { data: task } = await supabaseAdmin
     .from('companion_daily_tasks')
-    .select('status, checkin_responded_at')
+    .select('status, checkin_responded_at, is_rest_day')
     .eq('id', taskId)
     .single();
 
   if (!task || task.checkin_responded_at || task.status !== 'pending') {
     console.log(`[CHECKIN] Task already resolved for user ${userId}, skipping`);
+    return;
+  }
+
+  // Skip check-in for rest days
+  if (task.is_rest_day || task.status === 'rest') {
+    console.log(`[CHECKIN] Skipping check-in for rest day, user ${userId}`);
     return;
   }
 

@@ -9,12 +9,20 @@ export default async function taskRoutes(fastify: FastifyInstance) {
     preHandler: authMiddleware,
   }, async (request, reply) => {
     const userId = request.userId;
-    const { taskText, checkinOffsetHours } = request.body as {
-      taskText: string;
+    const { taskText, checkinOffsetHours, energyLevel, isRestDay } = request.body as {
+      taskText?: string;
       checkinOffsetHours?: number; // Hours from now until check-in (default: 4)
+      energyLevel?: string; // 'high', 'medium', 'low'
+      isRestDay?: boolean;
     };
 
-    if (!taskText || taskText.trim().length === 0) {
+    // Validate energyLevel if provided
+    if (energyLevel && !['high', 'medium', 'low'].includes(energyLevel)) {
+      return reply.status(400).send({ error: 'energyLevel must be high, medium, or low' });
+    }
+
+    // taskText is required unless it's a rest day
+    if (!isRestDay && (!taskText || taskText.trim().length === 0)) {
       return reply.status(400).send({ error: 'taskText is required' });
     }
 
@@ -29,14 +37,57 @@ export default async function taskRoutes(fastify: FastifyInstance) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
     const offsetHours = checkinOffsetHours || 4;
 
-    // Upsert today's task
+    // --- Rest day flow ---
+    if (isRestDay) {
+      const { data: task, error } = await supabaseAdmin
+        .from('companion_daily_tasks')
+        .upsert({
+          user_id: userId,
+          task_date: today,
+          task_text: null,
+          status: 'rest',
+          energy_level: energyLevel || null,
+          is_rest_day: true,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,task_date' })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[TASK] Rest day upsert failed:', error);
+        return reply.status(500).send({ error: 'Failed to save rest day' });
+      }
+
+      // Do NOT schedule a check-in job for rest days
+      // Remove any existing check-in job in case task was previously set
+      try {
+        const queues = getQueues();
+        const jobId = `checkin-${userId}-${today}`;
+        const existing = await queues.checkinReminder.getJob(jobId);
+        if (existing) await existing.remove();
+      } catch (queueErr) {
+        console.error('[TASK] Failed to remove existing check-in job:', queueErr);
+      }
+
+      console.log(`[TASK] Rest day set for user ${userId}`);
+
+      return reply.send({
+        success: true,
+        restDay: true,
+        message: 'Rest day locked in.',
+      });
+    }
+
+    // --- Normal task flow ---
     const { data: task, error } = await supabaseAdmin
       .from('companion_daily_tasks')
       .upsert({
         user_id: userId,
         task_date: today,
-        task_text: taskText.trim(),
+        task_text: taskText!.trim(),
         status: 'pending',
+        energy_level: energyLevel || null,
+        is_rest_day: false,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,task_date' })
       .select()
@@ -62,7 +113,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         {
           userId,
           taskId: task.id,
-          taskText: taskText.trim(),
+          taskText: taskText!.trim(),
           date: today,
         },
         {
