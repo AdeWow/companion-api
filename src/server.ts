@@ -13,6 +13,8 @@ import scheduleRoutes from './routes/schedule';
 import { startMorningWorker } from './workers/morningPrompt';
 import { startCheckinWorker } from './workers/checkinReminder';
 import { startExpirationWorker } from './workers/expiration';
+import { startFollowupWorker } from './workers/followupCheckin';
+import followupRoutes from './routes/followup';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
@@ -36,6 +38,7 @@ async function start() {
   await fastify.register(taskRoutes);
   await fastify.register(checkinRoutes);
   await fastify.register(scheduleRoutes);
+  await fastify.register(followupRoutes);
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
@@ -64,6 +67,7 @@ async function start() {
       startMorningWorker();
       startCheckinWorker();
       startExpirationWorker();
+      startFollowupWorker();
       console.log('[SERVER] All workers started');
     } else {
       console.warn('[SERVER] Redis not available — workers not started');

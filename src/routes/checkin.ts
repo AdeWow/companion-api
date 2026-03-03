@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
 import { selectMessage, renderMessage, logMessage, getRecentMessageIds } from '../lib/messages';
+import { getQueues } from '../lib/queue';
 
 const VALID_STATUSES = ['done', 'working', 'not_started', 'switched'];
 
@@ -129,6 +130,41 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
     const template = selectMessage(touchpoint, archetype, directiveness, recentIds);
     const responseText = renderMessage(template, { taskText: task.task_text });
     await logMessage(userId, template.id, touchpoint);
+
+    // Schedule or remove follow-up job
+    try {
+      const queues = getQueues();
+      const followupJobId = `followup-${taskId}`;
+
+      if (overallStatus === 'working' || overallStatus === 'not_started') {
+        // Schedule follow-up in 90 minutes
+        const existing = await queues.followupCheckin.getJob(followupJobId);
+        if (existing) await existing.remove();
+
+        await queues.followupCheckin.add(
+          followupJobId,
+          {
+            userId,
+            taskId,
+            originalStatus: overallStatus,
+            taskText: task.task_text,
+          },
+          {
+            delay: 90 * 60 * 1000, // 90 minutes
+            jobId: followupJobId,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 60000 },
+          }
+        );
+        console.log(`[CHECKIN] Follow-up scheduled for user ${userId} in 90min`);
+      } else {
+        // Remove any existing follow-up for done/switched
+        const existing = await queues.followupCheckin.getJob(followupJobId);
+        if (existing) await existing.remove();
+      }
+    } catch (queueErr) {
+      console.error('[CHECKIN] Failed to manage follow-up job:', queueErr);
+    }
 
     return reply.send({
       success: true,
