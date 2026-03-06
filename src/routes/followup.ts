@@ -1,14 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
+import { selectMessage } from '../config/messagePools';
 
 const VALID_FOLLOWUP_STATUSES = ['done', 'still_going', 'calling_it'];
-
-const FOLLOWUP_MESSAGES: Record<string, string> = {
-  done: 'Nice — got there in the end.',
-  still_going: 'Keep at it. No more interruptions from me today.',
-  calling_it: "No worries. Tomorrow's a fresh start.",
-};
 
 export default async function followupRoutes(fastify: FastifyInstance) {
   // POST /followup — User responds to follow-up check-in
@@ -57,7 +52,15 @@ export default async function followupRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: 'Task not found' });
     }
 
-    const responseText = FOLLOWUP_MESSAGES[status] || 'Got it.';
+    // Fetch archetype for message selection
+    const { data: quiz } = await supabaseAdmin
+      .from('quiz_results')
+      .select('archetype')
+      .eq('user_id', userId)
+      .single();
+
+    const archetype = quiz?.archetype || 'universal';
+    const responseText = selectMessage('followup_outcome', archetype, status);
 
     return reply.send({
       success: true,

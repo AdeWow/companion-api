@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
-import { selectMessage, renderMessage, logMessage, getRecentMessageIds } from '../lib/messages';
+import { selectMessage as selectPoolMessage } from '../config/messagePools';
 import { getQueues } from '../lib/queue';
 
 const VALID_STATUSES = ['done', 'working', 'not_started', 'switched'];
@@ -107,9 +107,6 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
     );
 
     // Select outcome response message
-    const messageTouchpoint = overallStatus === 'partial' ? 'outcome_done' : `outcome_${overallStatus}`;
-    const touchpoint = messageTouchpoint as 'outcome_done' | 'outcome_working' | 'outcome_not_started';
-
     const { data: quiz } = await supabaseAdmin
       .from('quiz_results')
       .select('archetype')
@@ -117,19 +114,8 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
       .single();
 
     const archetype = quiz?.archetype || 'universal';
-
-    const { data: settings } = await supabaseAdmin
-      .from('companion_user_settings')
-      .select('directiveness')
-      .eq('user_id', userId)
-      .single();
-
-    const directiveness = settings?.directiveness || 'gentle';
-
-    const recentIds = await getRecentMessageIds(userId, touchpoint);
-    const template = selectMessage(touchpoint, archetype, directiveness, recentIds);
-    const responseText = renderMessage(template, { taskText: task.task_text });
-    await logMessage(userId, template.id, touchpoint);
+    const messageStatus = overallStatus === 'partial' ? 'done' : overallStatus;
+    const responseText = selectPoolMessage('checkin_outcome', archetype, messageStatus);
 
     // Schedule or remove follow-up job
     try {
@@ -177,7 +163,6 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
       },
       response: {
         text: responseText,
-        messageId: template.id,
       },
     });
   });

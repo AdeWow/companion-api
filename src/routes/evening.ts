@@ -1,14 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
+import { selectMessage } from '../config/messagePools';
 
 const VALID_RESPONSES = ['good', 'okay', 'tough'];
-
-const EVENING_MESSAGES: Record<string, string> = {
-  good: 'Nice. Carry that into tomorrow.',
-  okay: 'Steady days add up. See you in the morning.',
-  tough: "Tough days happen. Tomorrow's a reset.",
-};
 
 export default async function eveningRoutes(fastify: FastifyInstance) {
   // POST /evening — User responds to evening reflection
@@ -46,7 +41,15 @@ export default async function eveningRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: 'Task not found' });
     }
 
-    const responseText = EVENING_MESSAGES[response] || 'Got it.';
+    // Fetch archetype for message selection
+    const { data: quiz } = await supabaseAdmin
+      .from('quiz_results')
+      .select('archetype')
+      .eq('user_id', userId)
+      .single();
+
+    const archetype = quiz?.archetype || 'universal';
+    const responseText = selectMessage('evening_outcome', archetype, response);
 
     return reply.send({
       success: true,
