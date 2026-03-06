@@ -35,8 +35,8 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = formatter.format(yesterday);
 
-      // 2. Fetch archetype + today's task + yesterday's task in parallel
-      const [archetypeResult, taskResult, yesterdayResult] = await Promise.all([
+      // 2. Fetch archetype + today's task + yesterday's task + last activity in parallel
+      const [archetypeResult, taskResult, yesterdayResult, lastActivityResult] = await Promise.all([
         supabaseAdmin
           .from('quiz_results')
           .select('archetype')
@@ -55,6 +55,13 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           .select('task_text, status, task_2_text, task_2_status, task_3_text, task_3_status')
           .eq('user_id', userId)
           .eq('task_date', yesterdayStr)
+          .single(),
+        supabaseAdmin
+          .from('companion_daily_tasks')
+          .select('task_date')
+          .eq('user_id', userId)
+          .order('task_date', { ascending: false })
+          .limit(1)
           .single(),
       ]);
 
@@ -103,6 +110,15 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Calculate days since last activity
+      let daysSinceLastActivity: number | null = null;
+      if (lastActivityResult.data?.task_date) {
+        const lastDate = new Date(lastActivityResult.data.task_date + 'T00:00:00');
+        const todayDate = new Date(today + 'T00:00:00');
+        const diffMs = todayDate.getTime() - lastDate.getTime();
+        daysSinceLastActivity = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      }
+
       const archetype = archetypeResult.data?.archetype ?? null;
       const config = getArchetypeConfig(archetype);
 
@@ -123,6 +139,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           task,
           morningSent,
         },
+        daysSinceLastActivity,
         carryForward,
         user: {
           archetype,
