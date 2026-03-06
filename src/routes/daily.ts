@@ -131,6 +131,47 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       const config = getArchetypeConfig(archetype);
       const morningInsight = archetype ? maybeGetInsight(archetype, 'morning') : null;
 
+      // Select morning prompt when no task exists today (MORNING state)
+      let morningPrompt: string | null = null;
+      if (!taskResult.data && config.morningPromptPool.length > 0) {
+        if (config.rotatePrompts) {
+          // Fetch recent prompts to avoid repeats
+          try {
+            const { data: recentPrompts } = await supabaseAdmin
+              .from('companion_prompt_history')
+              .select('prompt_text')
+              .eq('user_id', userId)
+              .order('shown_date', { ascending: false })
+              .limit(7);
+
+            const recentTexts = new Set(recentPrompts?.map(r => r.prompt_text) || []);
+            const available = config.morningPromptPool.filter(p => !recentTexts.has(p));
+            const pool = available.length > 0 ? available : config.morningPromptPool;
+            morningPrompt = pool[Math.floor(Math.random() * pool.length)];
+
+            // Track in history
+            await supabaseAdmin
+              .from('companion_prompt_history')
+              .insert({
+                user_id: userId,
+                prompt_text: morningPrompt,
+                shown_date: today,
+              })
+              .then(
+                () => {},
+                (err: any) => console.warn('[DAILY] Failed to insert prompt history:', err.message)
+              );
+          } catch (err: any) {
+            // Table may not exist yet — fall back to random
+            console.warn('[DAILY] Prompt history query failed (table may not exist):', err.message);
+            morningPrompt = config.morningPromptPool[Math.floor(Math.random() * config.morningPromptPool.length)];
+          }
+        } else {
+          // No rotation tracking — just pick randomly
+          morningPrompt = config.morningPromptPool[Math.floor(Math.random() * config.morningPromptPool.length)];
+        }
+      }
+
       console.log('[DAILY] archetype:', archetype, 'config:', JSON.stringify({
         maxTasks: config.maxTasks,
         morningStyle: config.morningStyle,
@@ -151,6 +192,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         daysSinceLastActivity,
         isWeekend,
         morningInsight,
+        morningPrompt,
         carryForward,
         user: {
           archetype,
