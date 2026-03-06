@@ -89,7 +89,54 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
     console.error(`[MORNING] Failed to send to user ${userId}:`, result.error);
   }
 
-  // 7. Schedule next morning prompt (tomorrow at the same time)
+  // 7. Schedule evening reflection for today at 8pm user local time
+  try {
+    const queues = getQueues();
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+    const eveningJobId = `evening-${userId}-${today}`;
+
+    // Calculate delay until 8pm in user's timezone
+    const nowUtc = new Date();
+    const tzFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+    const tzParts = tzFormatter.formatToParts(nowUtc);
+    const getTzPart = (type: string) => parseInt(tzParts.find(p => p.type === type)?.value || '0');
+    const nowTzMinutes = getTzPart('hour') * 60 + getTzPart('minute');
+    const eveningTzMinutes = 20 * 60; // 8pm = 20:00
+
+    let eveningDelayMinutes = eveningTzMinutes - nowTzMinutes;
+    if (eveningDelayMinutes > 0) {
+      const eveningDelayMs = eveningDelayMinutes * 60 * 1000;
+
+      const existing = await queues.eveningReflection.getJob(eveningJobId);
+      if (existing) await existing.remove();
+
+      await queues.eveningReflection.add(
+        eveningJobId,
+        { userId, taskDate: today },
+        {
+          delay: eveningDelayMs,
+          jobId: eveningJobId,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+        }
+      );
+      const eveningDelayHours = (eveningDelayMs / (1000 * 60 * 60)).toFixed(1);
+      console.log(`[MORNING] Evening reflection scheduled for user ${userId} in ${eveningDelayHours}h`);
+    }
+  } catch (err) {
+    console.error('[MORNING] Failed to schedule evening reflection:', err);
+  }
+
+  // 8. Schedule next morning prompt (tomorrow at the same time)
   if (morningTime) {
     await scheduleMorningPrompt(userId, morningTime, tz);
   }
