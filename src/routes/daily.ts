@@ -119,6 +119,13 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         daysSinceLastActivity = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       }
 
+      // Detect if today is a weekend
+      const dayOfWeek = new Date().toLocaleDateString('en-US', {
+        timeZone: tz,
+        weekday: 'long',
+      });
+      const isWeekend = dayOfWeek === 'Saturday' || dayOfWeek === 'Sunday';
+
       const archetype = archetypeResult.data?.archetype ?? null;
       const config = getArchetypeConfig(archetype);
 
@@ -140,6 +147,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           morningSent,
         },
         daysSinceLastActivity,
+        isWeekend,
         carryForward,
         user: {
           archetype,

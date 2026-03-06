@@ -150,7 +150,7 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
             taskText: task.task_text,
           },
           {
-            delay: 60 * 1000, // TODO: change back to 90 * 60 * 1000 for production
+            delay: 90 * 60 * 1000, // 90 minutes
             jobId: followupJobId,
             attempts: 3,
             backoff: { type: 'exponential', delay: 60000 },
