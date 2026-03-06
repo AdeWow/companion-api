@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { authMiddleware } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
 import { getArchetypeConfig } from '../config/archetypeConfig';
+import { maybeGetInsight } from '../config/insightLines';
 
 export default async function dailyRoutes(fastify: FastifyInstance) {
   fastify.get(
@@ -128,6 +129,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
 
       const archetype = archetypeResult.data?.archetype ?? null;
       const config = getArchetypeConfig(archetype);
+      const morningInsight = archetype ? maybeGetInsight(archetype, 'morning') : null;
 
       console.log('[DAILY] archetype:', archetype, 'config:', JSON.stringify({
         maxTasks: config.maxTasks,
@@ -148,6 +150,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         },
         daysSinceLastActivity,
         isWeekend,
+        morningInsight,
         carryForward,
         user: {
           archetype,

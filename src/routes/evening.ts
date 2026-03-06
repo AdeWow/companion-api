@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
 import { selectMessage } from '../config/messagePools';
+import { maybeGetInsight } from '../config/insightLines';
 
 const VALID_RESPONSES = ['good', 'okay', 'tough'];
 
@@ -50,6 +51,7 @@ export default async function eveningRoutes(fastify: FastifyInstance) {
 
     const archetype = quiz?.archetype || 'universal';
     const responseText = selectMessage('evening_outcome', archetype, response);
+    const insight = maybeGetInsight(archetype, 'evening');
 
     return reply.send({
       success: true,
@@ -60,6 +62,7 @@ export default async function eveningRoutes(fastify: FastifyInstance) {
       response: {
         text: responseText,
       },
+      insight,
     });
   });
 }

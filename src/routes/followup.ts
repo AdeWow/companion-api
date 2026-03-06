@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
 import { selectMessage } from '../config/messagePools';
+import { maybeGetInsight } from '../config/insightLines';
 
 const VALID_FOLLOWUP_STATUSES = ['done', 'still_going', 'calling_it'];
 
@@ -61,6 +62,7 @@ export default async function followupRoutes(fastify: FastifyInstance) {
 
     const archetype = quiz?.archetype || 'universal';
     const responseText = selectMessage('followup_outcome', archetype, status);
+    const insight = maybeGetInsight(archetype, `post_${status}`);
 
     return reply.send({
       success: true,
@@ -72,6 +74,7 @@ export default async function followupRoutes(fastify: FastifyInstance) {
       response: {
         text: responseText,
       },
+      insight,
     });
   });
 }
