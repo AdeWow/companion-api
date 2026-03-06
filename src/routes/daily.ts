@@ -28,10 +28,15 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
 
       const settings = settingsResult.data;
       const tz = settings.timezone || 'America/New_York';
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz });
+      const today = formatter.format(now);
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatter.format(yesterday);
 
-      // 2. Fetch archetype + today's daily task in parallel
-      const [archetypeResult, taskResult] = await Promise.all([
+      // 2. Fetch archetype + today's task + yesterday's task in parallel
+      const [archetypeResult, taskResult, yesterdayResult] = await Promise.all([
         supabaseAdmin
           .from('quiz_results')
           .select('archetype')
@@ -44,6 +49,12 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           .select('id, task_text, task_date, status, morning_sent_at, checkin_sent_at, checkin_responded_at, energy_level, is_rest_day, context_mode, task_2_text, task_2_status, task_3_text, task_3_status, followup_sent_at, followup_status, followup_responded_at, created_at')
           .eq('user_id', userId)
           .eq('task_date', today)
+          .single(),
+        supabaseAdmin
+          .from('companion_daily_tasks')
+          .select('task_text, status, task_2_text, task_2_status, task_3_text, task_3_status')
+          .eq('user_id', userId)
+          .eq('task_date', yesterdayStr)
           .single(),
       ]);
 
@@ -75,6 +86,21 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         };
       }
 
+      // Build carry-forward array from yesterday's unfinished tasks
+      const carryForward: string[] = [];
+      const yt = yesterdayResult.data;
+      if (yt) {
+        if (yt.task_text && !['done', 'rest'].includes(yt.status)) {
+          carryForward.push(yt.task_text);
+        }
+        if (yt.task_2_text && yt.task_2_status !== 'done') {
+          carryForward.push(yt.task_2_text);
+        }
+        if (yt.task_3_text && yt.task_3_status !== 'done') {
+          carryForward.push(yt.task_3_text);
+        }
+      }
+
       const archetype = archetypeResult.data?.archetype ?? null;
       const config = getArchetypeConfig(archetype);
 
@@ -95,6 +121,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           task,
           morningSent,
         },
+        carryForward,
         user: {
           archetype,
           morningTime: settings.morning_time,
