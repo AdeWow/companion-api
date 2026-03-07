@@ -3,6 +3,8 @@ import { authMiddleware } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
 import { getArchetypeConfig } from '../config/archetypeConfig';
 import { maybeGetInsight } from '../config/insightLines';
+import { computePatterns } from '../lib/patternEngine';
+import { generateMorningContext } from '../lib/personalMessages';
 
 export default async function dailyRoutes(fastify: FastifyInstance) {
   fastify.get(
@@ -193,6 +195,14 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Compute user patterns and personal morning context
+      const patterns = await computePatterns(supabaseAdmin, userId);
+      const yesterdayTaskText = yesterdayResult.data?.task_text || null;
+      const yesterdayStatus = yesterdayResult.data?.status || null;
+      const morningContext = archetype
+        ? generateMorningContext(patterns, archetype, yesterdayTaskText, yesterdayStatus)
+        : null;
+
       console.log('[DAILY] archetype:', archetype, 'config:', JSON.stringify({
         maxTasks: config.maxTasks,
         morningStyle: config.morningStyle,
@@ -214,8 +224,17 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         isWeekend,
         morningInsight,
         morningPrompt,
+        morningContext,
         weekStats,
         carryForward,
+        patterns: {
+          completionRate: patterns.completionRate,
+          currentStreak: patterns.currentStreak,
+          totalCompleted: patterns.totalTasksCompleted,
+          daysActive: patterns.daysActive,
+          trend: patterns.completionTrend,
+          bestDay: patterns.bestDayOfWeek,
+        },
         user: {
           archetype,
           morningTime: settings.morning_time,

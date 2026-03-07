@@ -3,6 +3,8 @@ import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
 import { selectMessage } from '../config/messagePools';
 import { maybeGetInsight } from '../config/insightLines';
+import { computePatterns } from '../lib/patternEngine';
+import { generateOutcomeMessage } from '../lib/personalMessages';
 
 const VALID_FOLLOWUP_STATUSES = ['done', 'still_going', 'calling_it'];
 
@@ -61,7 +63,11 @@ export default async function followupRoutes(fastify: FastifyInstance) {
       .single();
 
     const archetype = quiz?.archetype || 'universal';
-    const responseText = selectMessage('followup_outcome', archetype, status);
+
+    // Compute patterns and try personal message first
+    const patterns = await computePatterns(supabaseAdmin, userId);
+    const personalMessage = generateOutcomeMessage(patterns, archetype, status, task.task_text || '');
+    const responseText = personalMessage || selectMessage('followup_outcome', archetype, status);
     const insight = maybeGetInsight(archetype, `post_${status}`);
 
     return reply.send({
@@ -75,6 +81,12 @@ export default async function followupRoutes(fastify: FastifyInstance) {
         text: responseText,
       },
       insight,
+      patterns: {
+        completionRate: patterns.completionRate,
+        currentStreak: patterns.currentStreak,
+        totalCompleted: patterns.totalTasksCompleted,
+        trend: patterns.completionTrend,
+      },
     });
   });
 }

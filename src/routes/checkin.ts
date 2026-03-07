@@ -3,6 +3,8 @@ import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
 import { selectMessage as selectPoolMessage } from '../config/messagePools';
 import { maybeGetInsight } from '../config/insightLines';
+import { computePatterns } from '../lib/patternEngine';
+import { generateOutcomeMessage } from '../lib/personalMessages';
 import { getQueues } from '../lib/queue';
 
 const VALID_STATUSES = ['done', 'working', 'not_started', 'switched'];
@@ -116,7 +118,11 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
 
     const archetype = quiz?.archetype || 'universal';
     const messageStatus = overallStatus === 'partial' ? 'done' : overallStatus;
-    const responseText = selectPoolMessage('checkin_outcome', archetype, messageStatus);
+
+    // Compute patterns and try personal message first
+    const patterns = await computePatterns(supabaseAdmin, userId);
+    const personalMessage = generateOutcomeMessage(patterns, archetype, messageStatus, task.task_text || '');
+    const responseText = personalMessage || selectPoolMessage('checkin_outcome', archetype, messageStatus);
     const insight = maybeGetInsight(archetype, `post_${messageStatus}`);
 
     // Schedule or remove follow-up job
@@ -167,6 +173,12 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
         text: responseText,
       },
       insight,
+      patterns: {
+        completionRate: patterns.completionRate,
+        currentStreak: patterns.currentStreak,
+        totalCompleted: patterns.totalTasksCompleted,
+        trend: patterns.completionTrend,
+      },
     });
   });
 }

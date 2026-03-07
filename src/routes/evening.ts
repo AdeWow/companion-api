@@ -3,6 +3,8 @@ import { supabaseAdmin } from '../lib/supabase';
 import { authMiddleware } from '../middleware/auth';
 import { selectMessage } from '../config/messagePools';
 import { maybeGetInsight } from '../config/insightLines';
+import { computePatterns } from '../lib/patternEngine';
+import { generateOutcomeMessage } from '../lib/personalMessages';
 
 const VALID_RESPONSES = ['good', 'okay', 'tough'];
 
@@ -50,7 +52,11 @@ export default async function eveningRoutes(fastify: FastifyInstance) {
       .single();
 
     const archetype = quiz?.archetype || 'universal';
-    const responseText = selectMessage('evening_outcome', archetype, response);
+
+    // Compute patterns and try personal message first
+    const patterns = await computePatterns(supabaseAdmin, userId);
+    const personalMessage = generateOutcomeMessage(patterns, archetype, response, task.task_text || '');
+    const responseText = personalMessage || selectMessage('evening_outcome', archetype, response);
     const insight = maybeGetInsight(archetype, 'evening');
 
     return reply.send({
@@ -63,6 +69,12 @@ export default async function eveningRoutes(fastify: FastifyInstance) {
         text: responseText,
       },
       insight,
+      patterns: {
+        completionRate: patterns.completionRate,
+        currentStreak: patterns.currentStreak,
+        totalCompleted: patterns.totalTasksCompleted,
+        trend: patterns.completionTrend,
+      },
     });
   });
 }
