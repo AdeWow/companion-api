@@ -15,6 +15,7 @@ import { startCheckinWorker } from './workers/checkinReminder';
 import { startExpirationWorker } from './workers/expiration';
 import { startFollowupWorker } from './workers/followupCheckin';
 import { startEveningWorker } from './workers/eveningReflection';
+import { startWeeklySummaryWorker } from './workers/weeklySummary';
 import followupRoutes from './routes/followup';
 import eveningRoutes from './routes/evening';
 
@@ -72,6 +73,7 @@ async function start() {
       startExpirationWorker();
       startFollowupWorker();
       startEveningWorker();
+      startWeeklySummaryWorker();
       console.log('[SERVER] All workers started');
     } else {
       console.warn('[SERVER] Redis not available — workers not started');

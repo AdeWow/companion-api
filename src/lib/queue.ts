@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
   EXPIRATION: 'expiration',
   FOLLOWUP_CHECKIN: 'followup-checkin',
   EVENING_REFLECTION: 'evening-reflection',
+  WEEKLY_SUMMARY: 'weekly-summary',
 } as const;
 
 let queues: Record<string, Queue> | null = null;
@@ -22,6 +23,7 @@ export function getQueues() {
     expiration: new Queue(QUEUE_NAMES.EXPIRATION, { connection }),
     followupCheckin: new Queue(QUEUE_NAMES.FOLLOWUP_CHECKIN, { connection }),
     eveningReflection: new Queue(QUEUE_NAMES.EVENING_REFLECTION, { connection }),
+    weeklySummary: new Queue(QUEUE_NAMES.WEEKLY_SUMMARY, { connection }),
   };
 
   console.log('[QUEUE] All queues initialized');

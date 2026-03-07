@@ -138,7 +138,57 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
     console.error('[MORNING] Failed to schedule evening reflection:', err);
   }
 
-  // 8. Schedule next morning prompt (tomorrow at the same time)
+  // 8. Schedule weekly summary on Sundays at 7pm user local time
+  try {
+    const dayName = new Date().toLocaleDateString('en-US', {
+      timeZone: tz,
+      weekday: 'long',
+    });
+
+    if (dayName === 'Sunday') {
+      const queues = getQueues();
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+      const summaryJobId = `weekly-${userId}-${today}`;
+
+      // Calculate delay until 7pm in user's timezone
+      const nowUtc = new Date();
+      const tzFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      const tzParts = tzFormatter.formatToParts(nowUtc);
+      const getP = (type: string) => parseInt(tzParts.find(p => p.type === type)?.value || '0');
+      const nowMinutes = getP('hour') * 60 + getP('minute');
+      const summaryMinutes = 19 * 60; // 7pm
+
+      let summaryDelay = summaryMinutes - nowMinutes;
+      if (summaryDelay > 0) {
+        const summaryDelayMs = summaryDelay * 60 * 1000;
+
+        const existing = await queues.weeklySummary.getJob(summaryJobId);
+        if (existing) await existing.remove();
+
+        await queues.weeklySummary.add(
+          summaryJobId,
+          { userId },
+          {
+            delay: summaryDelayMs,
+            jobId: summaryJobId,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 5000 },
+          }
+        );
+        const summaryDelayHours = (summaryDelayMs / (1000 * 60 * 60)).toFixed(1);
+        console.log(`[MORNING] Weekly summary scheduled for user ${userId} in ${summaryDelayHours}h`);
+      }
+    }
+  } catch (err) {
+    console.error('[MORNING] Failed to schedule weekly summary:', err);
+  }
+
+  // 9. Schedule next morning prompt (tomorrow at the same time)
   if (morningTime) {
     await scheduleMorningPrompt(userId, morningTime, tz);
   }

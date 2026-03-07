@@ -127,6 +127,27 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       });
       const isWeekend = dayOfWeek === 'Saturday' || dayOfWeek === 'Sunday';
 
+      // Calculate Monday of current week in user's timezone
+      const todayDate = new Date(today + 'T00:00:00');
+      const todayDow = todayDate.getDay(); // 0 = Sunday
+      const mondayOffset = (todayDow + 6) % 7;
+      const mondayDate = new Date(todayDate);
+      mondayDate.setDate(mondayDate.getDate() - mondayOffset);
+      const weekStart = mondayDate.toISOString().split('T')[0];
+
+      const { data: weekTasks } = await supabaseAdmin
+        .from('companion_daily_tasks')
+        .select('status, is_rest_day, task_date')
+        .eq('user_id', userId)
+        .gte('task_date', weekStart)
+        .lte('task_date', today);
+
+      const weekStats = {
+        tasksSet: weekTasks?.length || 0,
+        completed: weekTasks?.filter(t => t.status === 'done').length || 0,
+        restDays: weekTasks?.filter(t => t.is_rest_day).length || 0,
+      };
+
       const archetype = archetypeResult.data?.archetype ?? null;
       const config = getArchetypeConfig(archetype);
       const morningInsight = archetype ? maybeGetInsight(archetype, 'morning') : null;
@@ -193,6 +214,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         isWeekend,
         morningInsight,
         morningPrompt,
+        weekStats,
         carryForward,
         user: {
           archetype,
