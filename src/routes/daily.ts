@@ -14,7 +14,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       // 1. Fetch user settings (needed for timezone)
       const settingsResult = await supabaseAdmin
         .from('companion_user_settings')
-        .select('morning_time, timezone, directiveness')
+        .select('morning_time, evening_time, timezone, directiveness')
         .eq('user_id', userId)
         .single();
 
@@ -197,6 +197,7 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         user: {
           archetype,
           morningTime: settings.morning_time,
+          eveningTime: settings.evening_time || '20:00:00',
           timezone: settings.timezone,
           config: {
             maxTasks: config.maxTasks,

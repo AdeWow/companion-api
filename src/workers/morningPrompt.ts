@@ -17,7 +17,7 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
   const [settingsResult, quizResult] = await Promise.all([
     supabaseAdmin
       .from('companion_user_settings')
-      .select('expo_push_token, directiveness, morning_time, timezone')
+      .select('expo_push_token, directiveness, morning_time, timezone, evening_time')
       .eq('user_id', userId)
       .single(),
     supabaseAdmin
@@ -32,7 +32,7 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
     return;
   }
 
-  const { expo_push_token: pushToken, directiveness: dir, morning_time: morningTime, timezone } = settingsResult.data;
+  const { expo_push_token: pushToken, directiveness: dir, morning_time: morningTime, timezone, evening_time: eveningTimePref } = settingsResult.data;
   const archetype = quizResult.data?.archetype || 'universal';
   const directiveness = dir || 'gentle';
 
@@ -110,7 +110,9 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
     const tzParts = tzFormatter.formatToParts(nowUtc);
     const getTzPart = (type: string) => parseInt(tzParts.find(p => p.type === type)?.value || '0');
     const nowTzMinutes = getTzPart('hour') * 60 + getTzPart('minute');
-    const eveningTzMinutes = 20 * 60; // 8pm = 20:00
+    const eveningTimeStr = eveningTimePref || '20:00:00';
+    const [eveningHour, eveningMinute] = eveningTimeStr.split(':').map(Number);
+    const eveningTzMinutes = eveningHour * 60 + (eveningMinute || 0);
 
     let eveningDelayMinutes = eveningTzMinutes - nowTzMinutes;
     if (eveningDelayMinutes > 0) {
