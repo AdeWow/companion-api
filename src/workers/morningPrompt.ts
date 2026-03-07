@@ -3,7 +3,7 @@ import { getRedisConnection } from '../lib/redis';
 import { getQueues, QUEUE_NAMES } from '../lib/queue';
 import { supabaseAdmin } from '../lib/supabase';
 import { sendPushNotification } from '../lib/push';
-import { selectMessage, renderMessage, logMessage, getRecentMessageIds } from '../lib/messages';
+import { getArchetypeConfig } from '../config/archetypeConfig';
 
 interface MorningPromptJob {
   userId: string;
@@ -17,7 +17,7 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
   const [settingsResult, quizResult] = await Promise.all([
     supabaseAdmin
       .from('companion_user_settings')
-      .select('expo_push_token, directiveness, morning_time, timezone, evening_time')
+      .select('expo_push_token, morning_time, timezone, evening_time')
       .eq('user_id', userId)
       .single(),
     supabaseAdmin
@@ -32,14 +32,13 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
     return;
   }
 
-  const { expo_push_token: pushToken, directiveness: dir, morning_time: morningTime, timezone, evening_time: eveningTimePref } = settingsResult.data;
-  const archetype = quizResult.data?.archetype || 'universal';
-  const directiveness = dir || 'gentle';
+  const { expo_push_token: pushToken, morning_time: morningTime, timezone, evening_time: eveningTimePref } = settingsResult.data;
+  const archetype = quizResult.data?.archetype || null;
 
-  // 2. Select a message
-  const recentIds = await getRecentMessageIds(userId, 'morning_opening');
-  const template = selectMessage('morning_opening', archetype, directiveness, recentIds);
-  const messageText = renderMessage(template, {});
+  // 2. Select a message from archetype prompt pool
+  const config = getArchetypeConfig(archetype);
+  const promptPool = config.morningPromptPool;
+  const messageText = promptPool[Math.floor(Math.random() * promptPool.length)];
 
   const tz = timezone || 'America/New_York';
 
@@ -48,13 +47,11 @@ async function processMorningPrompt(job: Job<MorningPromptJob>) {
     pushToken,
     title: 'Good morning',
     body: messageText,
-    data: { type: 'morning_prompt', messageId: template.id },
+    data: { type: 'morning_prompt' },
     categoryId: 'morning_prompt',
   });
 
   if (result.success) {
-    // 4. Log the message
-    await logMessage(userId, template.id, 'morning_opening');
 
     // 5. Create a placeholder daily task row
     const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
