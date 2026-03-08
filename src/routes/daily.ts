@@ -152,7 +152,6 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
 
       const archetype = archetypeResult.data?.archetype ?? null;
       const config = getArchetypeConfig(archetype);
-      const morningInsight = archetype ? maybeGetInsight(archetype, 'morning') : null;
 
       // Select morning prompt when no task exists today (MORNING state)
       let morningPrompt: string | null = null;
@@ -195,8 +194,9 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Compute user patterns and personal morning context
+      // Compute user patterns, personal morning context, and insight
       const patterns = await computePatterns(supabaseAdmin, userId);
+      const morningInsight = archetype ? maybeGetInsight(archetype, 'morning', patterns.daysActive) : null;
       const yesterdayTaskText = yesterdayResult.data?.task_text || null;
       const yesterdayStatus = yesterdayResult.data?.status || null;
       const morningContext = archetype

@@ -123,7 +123,7 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
     const patterns = await computePatterns(supabaseAdmin, userId);
     const personalMessage = generateOutcomeMessage(patterns, archetype, messageStatus, task.task_text || '');
     const responseText = personalMessage || selectPoolMessage('checkin_outcome', archetype, messageStatus);
-    const insight = maybeGetInsight(archetype, `post_${messageStatus}`);
+    const insight = maybeGetInsight(archetype, `post_${messageStatus}`, patterns.daysActive);
 
     // Schedule or remove follow-up job
     try {

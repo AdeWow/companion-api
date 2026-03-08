@@ -57,7 +57,7 @@ export default async function eveningRoutes(fastify: FastifyInstance) {
     const patterns = await computePatterns(supabaseAdmin, userId);
     const personalMessage = generateOutcomeMessage(patterns, archetype, response, task.task_text || '');
     const responseText = personalMessage || selectMessage('evening_outcome', archetype, response);
-    const insight = maybeGetInsight(archetype, 'evening');
+    const insight = maybeGetInsight(archetype, 'evening', patterns.daysActive);
 
     return reply.send({
       success: true,

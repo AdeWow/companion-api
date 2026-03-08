@@ -68,7 +68,7 @@ export default async function followupRoutes(fastify: FastifyInstance) {
     const patterns = await computePatterns(supabaseAdmin, userId);
     const personalMessage = generateOutcomeMessage(patterns, archetype, status, task.task_text || '');
     const responseText = personalMessage || selectMessage('followup_outcome', archetype, status);
-    const insight = maybeGetInsight(archetype, `post_${status}`);
+    const insight = maybeGetInsight(archetype, `post_${status}`, patterns.daysActive);
 
     return reply.send({
       success: true,
