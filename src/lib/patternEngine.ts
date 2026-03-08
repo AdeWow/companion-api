@@ -25,6 +25,11 @@ export interface UserPatterns {
   // Streak context
   daysActive: number;                // total days with any task
   daysSinceFirstTask: number;
+
+  // Execution vs planning (Strategic Planner feature)
+  executionDays: number;             // days rated 'mostly_executing'
+  planningDays: number;              // days rated 'mostly_planning'
+  mixedDays: number;                 // days rated 'mixed'
 }
 
 export async function computePatterns(
@@ -39,7 +44,7 @@ export async function computePatterns(
 
   const { data: tasks } = await supabase
     .from('companion_daily_tasks')
-    .select('task_date, task_text, status, task_2_text, task_2_status, task_3_text, task_3_status, is_rest_day, energy_level, followup_status')
+    .select('task_date, task_text, status, task_2_text, task_2_status, task_3_text, task_3_status, is_rest_day, energy_level, followup_status, execution_rating')
     .eq('user_id', userId)
     .gte('task_date', cutoff)
     .order('task_date', { ascending: false });
@@ -51,6 +56,7 @@ export async function computePatterns(
       worstDayOfWeek: null, averageCompletionCount: 0, repeatedTopics: [],
       currentFocus: null, restDayCount: 0, switchCount: 0,
       followThroughAfterWorking: 0, daysActive: 0, daysSinceFirstTask: 0,
+      executionDays: 0, planningDays: 0, mixedDays: 0,
     };
   }
 
@@ -183,6 +189,16 @@ export async function computePatterns(
     ? Math.round((workingThatFinished.length / workingTasks.length) * 100)
     : 0;
 
+  // Execution vs planning counts (Strategic Planner feature)
+  let executionDays = 0;
+  let planningDays = 0;
+  let mixedDays = 0;
+  for (const t of tasks) {
+    if ((t as any).execution_rating === 'mostly_executing') executionDays++;
+    else if ((t as any).execution_rating === 'mostly_planning') planningDays++;
+    else if ((t as any).execution_rating === 'mixed') mixedDays++;
+  }
+
   const daysActive = tasks.length;
   const firstTask = chronological[0];
   const daysSinceFirstTask = firstTask
@@ -195,5 +211,6 @@ export async function computePatterns(
     worstDayOfWeek: worstDay, averageCompletionCount: nonRestTasks.length > 0 ? totalCompleted / nonRestTasks.length : 0,
     repeatedTopics, currentFocus, restDayCount, switchCount,
     followThroughAfterWorking, daysActive, daysSinceFirstTask,
+    executionDays, planningDays, mixedDays,
   };
 }

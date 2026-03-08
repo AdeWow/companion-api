@@ -57,6 +57,16 @@ export function generateOutcomeMessage(
       options.push(`When you say "working on it," you finish ${patterns.followThroughAfterWorking}% of the time. Your word means something.`);
     }
 
+    // Execution vs planning ratio (Strategic Planner)
+    const totalRated = patterns.executionDays + patterns.planningDays + patterns.mixedDays;
+    if (archetype === 'strategic_planner' && totalRated >= 5) {
+      if (patterns.executionDays > patterns.planningDays) {
+        options.push(`Your execution-to-planning ratio is flipping. ${patterns.executionDays} execution days vs ${patterns.planningDays} planning days. The shift is real.`);
+      } else if (patterns.planningDays > patterns.executionDays) {
+        options.push(`${patterns.planningDays} planning-heavy days vs ${patterns.executionDays} execution days. You know what needs to change.`);
+      }
+    }
+
     if (options.length > 0) {
       return options[Math.floor(Math.random() * options.length)];
     }
