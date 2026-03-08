@@ -98,14 +98,21 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(500).send({ error: 'Failed to save rest day' });
       }
 
-      // Do NOT schedule a check-in job for rest days
+      // Do NOT schedule check-in or mid-day jobs for rest days
       try {
         const queues = getQueues();
         const jobId = `checkin-${userId}-${today}`;
         const existing = await queues.checkinReminder.getJob(jobId);
         if (existing) await existing.remove();
+
+        // Also remove any pending mid-day encouragement
+        if (task?.id) {
+          const midDayJobId = `midday-${task.id}`;
+          const existingMidDay = await queues.midDayEncouragement.getJob(midDayJobId);
+          if (existingMidDay) await existingMidDay.remove();
+        }
       } catch (queueErr) {
-        console.error('[TASK] Failed to remove existing check-in job:', queueErr);
+        console.error('[TASK] Failed to remove existing jobs:', queueErr);
       }
 
       console.log(`[TASK] Rest day set for user ${userId}`);
@@ -178,6 +185,33 @@ export default async function taskRoutes(fastify: FastifyInstance) {
           backoff: { type: 'exponential', delay: 60000 },
         }
       );
+
+      // Schedule mid-day encouragement at the midpoint (only if check-in is 2+ hours away)
+      const midDayJobId = `midday-${task.id}`;
+      const existingMidDay = await queues.midDayEncouragement.getJob(midDayJobId);
+      if (existingMidDay) await existingMidDay.remove();
+
+      if (offsetHours >= 2) {
+        const midpointDelayMs = Math.floor(checkinDelay / 2);
+        const checkinTime = new Date(Date.now() + checkinDelay).toISOString();
+
+        await queues.midDayEncouragement.add(
+          'midday-encouragement',
+          {
+            userId,
+            taskId: task.id,
+            taskText: tasks[0],
+            checkinTime,
+          },
+          {
+            delay: midpointDelayMs,
+            jobId: midDayJobId,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 5000 },
+          }
+        );
+        console.log(`[TASK] Mid-day encouragement scheduled for user ${userId} in ${offsetHours / 2}h`);
+      }
 
       console.log(`[TASK] ${tasks.length} task(s) set for user ${userId}, check-in in ${offsetHours}h`);
     } catch (queueErr) {

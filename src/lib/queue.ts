@@ -4,6 +4,7 @@ import { getRedisConnection } from './redis';
 export const QUEUE_NAMES = {
   MORNING_PROMPT: 'morning-prompt',
   CHECKIN_REMINDER: 'checkin-reminder',
+  MIDDAY_ENCOURAGEMENT: 'midday-encouragement',
   EXPIRATION: 'expiration',
   FOLLOWUP_CHECKIN: 'followup-checkin',
   EVENING_REFLECTION: 'evening-reflection',
@@ -20,6 +21,7 @@ export function getQueues() {
   queues = {
     morningPrompt: new Queue(QUEUE_NAMES.MORNING_PROMPT, { connection }),
     checkinReminder: new Queue(QUEUE_NAMES.CHECKIN_REMINDER, { connection }),
+    midDayEncouragement: new Queue(QUEUE_NAMES.MIDDAY_ENCOURAGEMENT, { connection }),
     expiration: new Queue(QUEUE_NAMES.EXPIRATION, { connection }),
     followupCheckin: new Queue(QUEUE_NAMES.FOLLOWUP_CHECKIN, { connection }),
     eveningReflection: new Queue(QUEUE_NAMES.EVENING_REFLECTION, { connection }),

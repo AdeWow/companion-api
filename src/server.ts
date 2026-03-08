@@ -16,6 +16,7 @@ import { startExpirationWorker } from './workers/expiration';
 import { startFollowupWorker } from './workers/followupCheckin';
 import { startEveningWorker } from './workers/eveningReflection';
 import { startWeeklySummaryWorker } from './workers/weeklySummary';
+import { startMidDayWorker } from './workers/midDayEncouragement';
 import followupRoutes from './routes/followup';
 import eveningRoutes from './routes/evening';
 
@@ -70,6 +71,7 @@ async function start() {
     if (redis) {
       startMorningWorker();
       startCheckinWorker();
+      startMidDayWorker();
       startExpirationWorker();
       startFollowupWorker();
       startEveningWorker();

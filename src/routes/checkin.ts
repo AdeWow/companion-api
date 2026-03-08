@@ -125,6 +125,16 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
     const responseText = personalMessage || selectPoolMessage('checkin_outcome', archetype, messageStatus);
     const insight = maybeGetInsight(archetype, `post_${messageStatus}`, patterns.daysActive);
 
+    // Cancel mid-day encouragement (user has checked in)
+    try {
+      const queues = getQueues();
+      const midDayJobId = `midday-${taskId}`;
+      const existingMidDay = await queues.midDayEncouragement.getJob(midDayJobId);
+      if (existingMidDay) await existingMidDay.remove();
+    } catch (midDayErr) {
+      console.error('[CHECKIN] Failed to remove mid-day job:', midDayErr);
+    }
+
     // Schedule or remove follow-up job
     try {
       const queues = getQueues();
