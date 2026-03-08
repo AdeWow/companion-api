@@ -239,6 +239,10 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           daysActive: patterns.daysActive,
           trend: patterns.completionTrend,
           bestDay: patterns.bestDayOfWeek,
+          peakSetHour: patterns.peakSetHour ?? null,
+          peakDoneHour: patterns.peakDoneHour ?? null,
+          uniqueTopicsLast14Days: patterns.uniqueTopicsLast14Days ?? 0,
+          staleTopics: patterns.staleTopics ?? [],
         },
         user: {
           archetype,
