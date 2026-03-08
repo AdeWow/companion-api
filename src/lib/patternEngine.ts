@@ -30,6 +30,24 @@ export interface UserPatterns {
   executionDays: number;             // days rated 'mostly_executing'
   planningDays: number;              // days rated 'mostly_planning'
   mixedDays: number;                 // days rated 'mixed'
+
+  // Category split
+  personalTasks: number;
+  professionalTasks: number;
+  sideProjectTasks: number;
+
+  // Intensity split
+  lightDays: number;
+  mediumDays: number;
+  heavyDays: number;
+
+  // Peak hours (Chaotic Creative feature)
+  peakSetHour: number | null;        // most common hour tasks are set
+  peakDoneHour: number | null;       // most common hour tasks are completed
+
+  // Project rotation (Novelty Seeker feature)
+  uniqueTopicsLast14Days: number;
+  staleTopics: string[];             // topics not touched in 7+ days
 }
 
 export async function computePatterns(
@@ -44,7 +62,7 @@ export async function computePatterns(
 
   const { data: tasks } = await supabase
     .from('companion_daily_tasks')
-    .select('task_date, task_text, status, task_2_text, task_2_status, task_3_text, task_3_status, is_rest_day, energy_level, followup_status, execution_rating')
+    .select('task_date, task_text, status, task_2_text, task_2_status, task_3_text, task_3_status, is_rest_day, energy_level, followup_status, execution_rating, task_category, shipping_intensity, task_set_at, task_completed_at')
     .eq('user_id', userId)
     .gte('task_date', cutoff)
     .order('task_date', { ascending: false });
@@ -57,6 +75,10 @@ export async function computePatterns(
       currentFocus: null, restDayCount: 0, switchCount: 0,
       followThroughAfterWorking: 0, daysActive: 0, daysSinceFirstTask: 0,
       executionDays: 0, planningDays: 0, mixedDays: 0,
+      personalTasks: 0, professionalTasks: 0, sideProjectTasks: 0,
+      lightDays: 0, mediumDays: 0, heavyDays: 0,
+      peakSetHour: null, peakDoneHour: null,
+      uniqueTopicsLast14Days: 0, staleTopics: [],
     };
   }
 
@@ -199,6 +221,94 @@ export async function computePatterns(
     else if ((t as any).execution_rating === 'mixed') mixedDays++;
   }
 
+  // Category split
+  let personalTasks = 0;
+  let professionalTasks = 0;
+  let sideProjectTasks = 0;
+  for (const t of tasks) {
+    if ((t as any).task_category === 'personal') personalTasks++;
+    else if ((t as any).task_category === 'professional') professionalTasks++;
+    else if ((t as any).task_category === 'side_project') sideProjectTasks++;
+  }
+
+  // Intensity split
+  let lightDays = 0;
+  let mediumDays = 0;
+  let heavyDays = 0;
+  for (const t of tasks) {
+    if ((t as any).shipping_intensity === 'light') lightDays++;
+    else if ((t as any).shipping_intensity === 'medium') mediumDays++;
+    else if ((t as any).shipping_intensity === 'heavy') heavyDays++;
+  }
+
+  // Peak hours — find the most common hour for setting and completing tasks
+  function findModeHour(timestamps: string[]): number | null {
+    if (timestamps.length === 0) return null;
+    const hourCounts: Record<number, number> = {};
+    for (const ts of timestamps) {
+      const hour = new Date(ts).getHours();
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    }
+    let maxCount = 0;
+    let modeHour: number | null = null;
+    for (const [hour, count] of Object.entries(hourCounts)) {
+      if (count > maxCount) {
+        maxCount = count;
+        modeHour = parseInt(hour);
+      }
+    }
+    return modeHour;
+  }
+
+  const setTimestamps = tasks
+    .map(t => (t as any).task_set_at)
+    .filter(Boolean) as string[];
+  const doneTimestamps = tasks
+    .map(t => (t as any).task_completed_at)
+    .filter(Boolean) as string[];
+
+  const peakSetHour = findModeHour(setTimestamps);
+  const peakDoneHour = findModeHour(doneTimestamps);
+
+  // Unique topics in last 14 days (Novelty Seeker feature)
+  const fourteenDaysAgo = new Date();
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+  const fourteenDayStr = fourteenDaysAgo.toISOString().split('T')[0];
+
+  const last14DayTexts = tasks
+    .filter(t => t.task_date >= fourteenDayStr)
+    .map(t => [t.task_text, t.task_2_text, t.task_3_text])
+    .flat()
+    .filter(Boolean)
+    .map((t: string) => t.toLowerCase());
+
+  const last14DayWords = new Set<string>();
+  for (const text of last14DayTexts) {
+    const words = text.split(/\s+/).filter((w: string) => w.length > 3 && !stopWords.has(w));
+    for (const word of words) last14DayWords.add(word);
+  }
+  const uniqueTopicsLast14Days = last14DayWords.size;
+
+  // Stale topics — appeared 7+ days ago but not in the last 7 days
+  const sevenDayStr = sevenDaysAgo.toISOString().split('T')[0];
+  const olderTexts = tasks
+    .filter(t => t.task_date < sevenDayStr)
+    .map(t => [t.task_text, t.task_2_text, t.task_3_text])
+    .flat()
+    .filter(Boolean)
+    .map((t: string) => t.toLowerCase());
+
+  const olderWords = new Set<string>();
+  for (const text of olderTexts) {
+    const words = text.split(/\s+/).filter((w: string) => w.length > 3 && !stopWords.has(w));
+    for (const word of words) olderWords.add(word);
+  }
+
+  const recentWordsSet = new Set(Object.keys(recentWordCounts));
+  const staleTopics = [...olderWords]
+    .filter(w => !recentWordsSet.has(w))
+    .slice(0, 5);
+
   const daysActive = tasks.length;
   const firstTask = chronological[0];
   const daysSinceFirstTask = firstTask
@@ -212,5 +322,9 @@ export async function computePatterns(
     repeatedTopics, currentFocus, restDayCount, switchCount,
     followThroughAfterWorking, daysActive, daysSinceFirstTask,
     executionDays, planningDays, mixedDays,
+    personalTasks, professionalTasks, sideProjectTasks,
+    lightDays, mediumDays, heavyDays,
+    peakSetHour, peakDoneHour,
+    uniqueTopicsLast14Days, staleTopics,
   };
 }

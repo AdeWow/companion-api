@@ -32,6 +32,7 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
         task2?: string;
         task3?: string;
       };
+      executionRating?: string;
     };
 
     const { taskId } = body;
@@ -85,6 +86,17 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
       overallStatus = body.status;
     } else {
       return reply.status(400).send({ error: 'status or statuses is required' });
+    }
+
+    // Save execution rating if provided (strategic_planner feature)
+    const VALID_RATINGS = ['mostly_executing', 'mixed', 'mostly_planning'];
+    if (body.executionRating && VALID_RATINGS.includes(body.executionRating)) {
+      updateFields.execution_rating = body.executionRating;
+    }
+
+    // Record completion timestamp when task is done
+    if (overallStatus === 'done') {
+      updateFields.task_completed_at = new Date().toISOString();
     }
 
     // Update task

@@ -67,6 +67,24 @@ export function generateOutcomeMessage(
       }
     }
 
+    // Category balance
+    if (patterns.personalTasks > patterns.professionalTasks && patterns.personalTasks >= 3) {
+      options.push("You've been focusing on personal tasks lately. That balance matters.");
+    }
+
+    // Intensity warnings (last 7 days approximated from total counts with 5+ data)
+    if (patterns.heavyDays >= 3 && patterns.daysActive >= 7) {
+      options.push("Multiple heavy shipping days this week. Watch for burnout.");
+    }
+    if (patterns.lightDays >= 3 && patterns.daysActive >= 7) {
+      options.push("Lighter week. Sometimes that's exactly what's needed.");
+    }
+
+    // Peak done hour (Chaotic Creative)
+    if (archetype === 'chaotic_creative' && patterns.peakDoneHour !== null) {
+      options.push(`You tend to finish things around ${patterns.peakDoneHour}:00. Your brain has a rhythm.`);
+    }
+
     if (options.length > 0) {
       return options[Math.floor(Math.random() * options.length)];
     }
@@ -147,6 +165,11 @@ export function generateMorningContext(
   // Topic continuity
   if (patterns.currentFocus) {
     options.push(`You've been focused on "${patterns.currentFocus}" lately. Continuing or switching gears?`);
+  }
+
+  // Stale topics (Novelty Seeker)
+  if (archetype === 'novelty_seeker' && patterns.staleTopics.length > 0) {
+    options.push(`You haven't touched "${patterns.staleTopics[0]}" in over a week. Still alive or ready to let it go?`);
   }
 
   if (options.length > 0) {

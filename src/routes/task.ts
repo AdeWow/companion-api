@@ -17,9 +17,11 @@ export default async function taskRoutes(fastify: FastifyInstance) {
       energyLevel?: string;
       isRestDay?: boolean;
       contextMode?: string;
+      taskCategory?: string;
+      shippingIntensity?: string;
     };
 
-    const { checkinOffsetHours, energyLevel, isRestDay, contextMode } = body;
+    const { checkinOffsetHours, energyLevel, isRestDay, contextMode, taskCategory, shippingIntensity } = body;
 
     // Validate energyLevel if provided
     if (energyLevel && !['high', 'medium', 'low'].includes(energyLevel)) {
@@ -29,6 +31,16 @@ export default async function taskRoutes(fastify: FastifyInstance) {
     // Validate contextMode if provided
     if (contextMode && !['execution', 'creative', 'planning', 'low_energy'].includes(contextMode)) {
       return reply.status(400).send({ error: 'contextMode must be execution, creative, planning, or low_energy' });
+    }
+
+    // Validate taskCategory if provided
+    if (taskCategory && !['personal', 'professional', 'side_project'].includes(taskCategory)) {
+      return reply.status(400).send({ error: 'taskCategory must be personal, professional, or side_project' });
+    }
+
+    // Validate shippingIntensity if provided
+    if (shippingIntensity && !['light', 'medium', 'heavy'].includes(shippingIntensity)) {
+      return reply.status(400).send({ error: 'shippingIntensity must be light, medium, or heavy' });
     }
 
     // Normalize tasks array (backward compatible)
@@ -151,6 +163,9 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         energy_level: energyLevel || null,
         is_rest_day: false,
         context_mode: contextMode || null,
+        task_category: taskCategory || null,
+        shipping_intensity: shippingIntensity || null,
+        task_set_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,task_date' })
       .select()
