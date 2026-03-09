@@ -169,7 +169,7 @@ export function generateMorningContext(
 
   // Stale topics (Novelty Seeker)
   if (archetype === 'novelty_seeker' && patterns.staleTopics.length > 0) {
-    options.push(`You haven't touched "${patterns.staleTopics[0]}" in over a week. Still alive or ready to let it go?`);
+    options.push(`You haven't touched "${patterns.staleTopics[0].taskText}" in over a week. Still alive or ready to let it go?`);
   }
 
   if (options.length > 0) {

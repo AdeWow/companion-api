@@ -47,7 +47,7 @@ export interface UserPatterns {
 
   // Project rotation (Novelty Seeker feature)
   uniqueTopicsLast14Days: number;
-  staleTopics: string[];             // topics not touched in 7+ days
+  staleTopics: Array<{ keyword: string; taskText: string; lastDate: string }>;  // topics not touched in 7+ days
 }
 
 export async function computePatterns(
@@ -289,25 +289,39 @@ export async function computePatterns(
   }
   const uniqueTopicsLast14Days = last14DayWords.size;
 
-  // Stale topics — appeared 7+ days ago but not in the last 7 days
+  // Stale topics — keywords that appeared 7+ days ago but not in the last 7 days
+  // For each stale keyword, find the most recent task text containing it
   const sevenDayStr = sevenDaysAgo.toISOString().split('T')[0];
-  const olderTexts = tasks
-    .filter(t => t.task_date < sevenDayStr)
-    .map(t => [t.task_text, t.task_2_text, t.task_3_text])
-    .flat()
-    .filter(Boolean)
-    .map((t: string) => t.toLowerCase());
+  const olderTaskRows = tasks.filter(t => t.task_date < sevenDayStr);
 
   const olderWords = new Set<string>();
-  for (const text of olderTexts) {
-    const words = text.split(/\s+/).filter((w: string) => w.length > 3 && !stopWords.has(w));
-    for (const word of words) olderWords.add(word);
+  for (const t of olderTaskRows) {
+    const texts = [t.task_text, t.task_2_text, t.task_3_text].filter(Boolean);
+    for (const text of texts) {
+      const words = (text as string).toLowerCase().split(/\s+/).filter((w: string) => w.length > 3 && !stopWords.has(w));
+      for (const word of words) olderWords.add(word);
+    }
   }
 
   const recentWordsSet = new Set(Object.keys(recentWordCounts));
-  const staleTopics = [...olderWords]
-    .filter(w => !recentWordsSet.has(w))
-    .slice(0, 5);
+  const staleKeywords = [...olderWords]
+    .filter(w => !recentWordsSet.has(w));
+
+  // For each stale keyword, find the most recent task containing it (olderTaskRows sorted desc by date)
+  const staleTopics: Array<{ keyword: string; taskText: string; lastDate: string }> = [];
+  const seen = new Set<string>();
+  for (const keyword of staleKeywords) {
+    if (staleTopics.length >= 5) break;
+    for (const t of olderTaskRows) {
+      const texts = [t.task_text, t.task_2_text, t.task_3_text].filter(Boolean) as string[];
+      const match = texts.find(text => text.toLowerCase().includes(keyword));
+      if (match && !seen.has(match)) {
+        seen.add(match);
+        staleTopics.push({ keyword, taskText: match, lastDate: t.task_date });
+        break;
+      }
+    }
+  }
 
   const daysActive = tasks.length;
   const firstTask = chronological[0];
