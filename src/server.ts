@@ -19,6 +19,7 @@ import { startWeeklySummaryWorker } from './workers/weeklySummary';
 import { startMidDayWorker } from './workers/midDayEncouragement';
 import followupRoutes from './routes/followup';
 import eveningRoutes from './routes/evening';
+import aiRoutes from './routes/ai';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
@@ -44,6 +45,7 @@ async function start() {
   await fastify.register(scheduleRoutes);
   await fastify.register(followupRoutes);
   await fastify.register(eveningRoutes);
+  await fastify.register(aiRoutes);
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
