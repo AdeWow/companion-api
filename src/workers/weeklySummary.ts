@@ -26,11 +26,13 @@ async function processWeeklySummary(job: Job<WeeklySummaryJob>) {
 
   const tz = settings.timezone || 'America/New_York';
 
-  // 2. Calculate Monday–Sunday of the current week
+  // 2. Calculate Monday–Sunday of the current week (timezone-aware)
   const now = new Date();
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: tz });
-  const todayDate = new Date(todayStr + 'T00:00:00');
-  const dayOfWeek = todayDate.getDay(); // 0 = Sunday
+  const todayDate = new Date(todayStr + 'T12:00:00');
+  const todayDowName = todayDate.toLocaleDateString('en-US', { weekday: 'short', timeZone: tz });
+  const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const dayOfWeek = dowMap[todayDowName] ?? 0;
   // Monday = today - ((dayOfWeek + 6) % 7) days
   const mondayOffset = (dayOfWeek + 6) % 7;
   const monday = new Date(todayDate);

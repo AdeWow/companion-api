@@ -30,7 +30,22 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       }
 
       const settings = settingsResult.data;
-      const tz = settings.timezone || 'America/New_York';
+
+      // Prefer device timezone from query param (sent on every /daily call) over stored value.
+      // This ensures day-of-week is always accurate even if the user travels or the stored tz is stale.
+      const clientTz = (request.query as Record<string, string>)?.tz;
+      const tz = clientTz || settings.timezone || 'America/New_York';
+
+      // If client sent a timezone and it differs from stored, update it silently
+      if (clientTz && clientTz !== settings.timezone) {
+        supabaseAdmin
+          .from('companion_user_settings')
+          .update({ timezone: clientTz })
+          .eq('user_id', userId)
+          .then(() => {})
+          .catch(() => {}); // fire-and-forget, don't block the response
+      }
+
       const now = new Date();
       const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz });
       const today = formatter.format(now);
@@ -135,8 +150,10 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       const isWeekend = dayOfWeek === 'Saturday' || dayOfWeek === 'Sunday';
 
       // Calculate Monday of current week in user's timezone
-      const todayDate = new Date(today + 'T00:00:00');
-      const todayDow = todayDate.getDay(); // 0 = Sunday
+      const todayDate = new Date(today + 'T12:00:00');
+      const todayDowName = todayDate.toLocaleDateString('en-US', { weekday: 'short', timeZone: tz });
+      const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      const todayDow = dowMap[todayDowName] ?? 0;
       const mondayOffset = (todayDow + 6) % 7;
       const mondayDate = new Date(todayDate);
       mondayDate.setDate(mondayDate.getDate() - mondayOffset);

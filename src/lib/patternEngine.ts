@@ -48,12 +48,23 @@ export interface UserPatterns {
   // Project rotation (Novelty Seeker feature)
   uniqueTopicsLast14Days: number;
   staleTopics: Array<{ keyword: string; taskText: string; lastDate: string }>;  // topics not touched in 7+ days
+
+  // User context
+  timezone: string;
 }
 
 export async function computePatterns(
   supabase: SupabaseClient,
   userId: string
 ): Promise<UserPatterns> {
+
+  // Fetch user's timezone
+  const { data: userSettings } = await supabase
+    .from('companion_user_settings')
+    .select('timezone')
+    .eq('user_id', userId)
+    .single();
+  const timezone = userSettings?.timezone || 'America/New_York';
 
   // Fetch all tasks for this user (last 90 days max for performance)
   const ninetyDaysAgo = new Date();
@@ -79,6 +90,7 @@ export async function computePatterns(
       lightDays: 0, mediumDays: 0, heavyDays: 0,
       peakSetHour: null, peakDoneHour: null,
       uniqueTopicsLast14Days: 0, staleTopics: [],
+      timezone,
     };
   }
 
@@ -138,11 +150,10 @@ export async function computePatterns(
     }
   }
 
-  // Best/worst day of week
+  // Best/worst day of week (timezone-aware)
   const dayCompletions: Record<string, { done: number; total: number }> = {};
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   for (const t of nonRestTasks) {
-    const day = dayNames[new Date(t.task_date + 'T12:00:00').getDay()];
+    const day = new Date(t.task_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', timeZone: timezone });
     if (!dayCompletions[day]) dayCompletions[day] = { done: 0, total: 0 };
     dayCompletions[day].total++;
     if (t.status === 'done') dayCompletions[day].done++;
@@ -340,5 +351,6 @@ export async function computePatterns(
     lightDays, mediumDays, heavyDays,
     peakSetHour, peakDoneHour,
     uniqueTopicsLast14Days, staleTopics,
+    timezone,
   };
 }

@@ -41,7 +41,7 @@ export function generateOutcomeMessage(
 
     // Best day observation
     if (patterns.bestDayOfWeek) {
-      const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: patterns.timezone });
       if (today === patterns.bestDayOfWeek) {
         options.push(`${patterns.bestDayOfWeek}s are your best day. You're proving it right now.`);
       }
@@ -148,7 +148,7 @@ export function generateMorningContext(
 
   // Day of week context
   if (patterns.bestDayOfWeek) {
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: patterns.timezone });
     if (today === patterns.bestDayOfWeek) {
       options.push(`${today}. Historically your strongest day. Make it count.`);
     }
