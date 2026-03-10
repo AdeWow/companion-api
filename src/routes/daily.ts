@@ -42,8 +42,10 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
           .from('companion_user_settings')
           .update({ timezone: clientTz })
           .eq('user_id', userId)
-          .then(() => {})
-          .catch(() => {}); // fire-and-forget, don't block the response
+          .then(
+            () => {},
+            () => {}  // fire-and-forget, don't block the response
+          );
       }
 
       const now = new Date();
@@ -218,6 +220,8 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
 
       // Compute user patterns, personal morning context, and insight
       const patterns = await computePatterns(supabaseAdmin, userId);
+      // Ensure patterns uses the device timezone (in case stored tz is stale)
+      patterns.timezone = tz;
       const morningInsight = archetype ? maybeGetInsight(archetype, 'morning', patterns.daysActive) : null;
       const yesterdayTaskText = yesterdayResult.data?.task_text || null;
       const yesterdayStatus = yesterdayResult.data?.status || null;
