@@ -219,14 +219,28 @@ export default async function dailyRoutes(fastify: FastifyInstance) {
       }
 
       // Compute user patterns, personal morning context, and insight
-      const patterns = await computePatterns(supabaseAdmin, userId);
+      const [patterns, activeThoughtsResult] = await Promise.all([
+        computePatterns(supabaseAdmin, userId),
+        supabaseAdmin
+          .from('companion_thoughts')
+          .select('content, source, created_at')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(10),
+      ]);
       // Ensure patterns uses the device timezone (in case stored tz is stale)
       patterns.timezone = tz;
+      const activeThoughts = (activeThoughtsResult.data || []).map((t) => ({
+        content: t.content,
+        source: t.source,
+        createdAt: t.created_at,
+      }));
       const morningInsight = archetype ? maybeGetInsight(archetype, 'morning', patterns.daysActive) : null;
       const yesterdayTaskText = yesterdayResult.data?.task_text || null;
       const yesterdayStatus = yesterdayResult.data?.status || null;
       const morningContext = archetype
-        ? generateMorningContext(patterns, archetype, yesterdayTaskText, yesterdayStatus)
+        ? generateMorningContext(patterns, archetype, yesterdayTaskText, yesterdayStatus, activeThoughts)
         : null;
 
       console.log('[DAILY] archetype:', archetype, 'config:', JSON.stringify({

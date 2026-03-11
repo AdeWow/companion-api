@@ -25,7 +25,7 @@ function checkRateLimit(userId: string): boolean {
 }
 
 async function buildContext(userId: string): Promise<AIContext> {
-  const [patterns, archetypeResult, recentTasksResult, settingsResult] =
+  const [patterns, archetypeResult, recentTasksResult, settingsResult, thoughtsResult] =
     await Promise.all([
       computePatterns(supabaseAdmin, userId),
       supabaseAdmin
@@ -46,6 +46,13 @@ async function buildContext(userId: string): Promise<AIContext> {
         .select('timezone')
         .eq('user_id', userId)
         .single(),
+      supabaseAdmin
+        .from('companion_thoughts')
+        .select('content, source, created_at')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(10),
     ]);
 
   const archetype = archetypeResult.data?.archetype || 'adaptive_generalist';
@@ -77,6 +84,11 @@ async function buildContext(userId: string): Promise<AIContext> {
       text: t.task_text || '',
       status: t.status,
       date: t.task_date,
+    })),
+    activeThoughts: (thoughtsResult.data || []).map((t) => ({
+      content: t.content,
+      source: t.source,
+      createdAt: t.created_at,
     })),
     dayOfWeek,
     timeOfDay: hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening',

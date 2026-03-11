@@ -18,6 +18,7 @@ export interface AIContext {
   recentTasks: Array<{ text: string; status: string; date: string }>;
   currentEnergy?: string;
   currentContext?: string;
+  activeThoughts?: Array<{ content: string; source: string; createdAt: string }>;
   dayOfWeek: string;
   timeOfDay: string;
   isWeekend: boolean;
@@ -102,6 +103,12 @@ USER'S PATTERNS:
 RECENT TASKS (last 7 days):
 ${context.recentTasks.map(t => `- "${t.text}" (${t.status}, ${t.date})`).join('\n')}
 
+${context.activeThoughts && context.activeThoughts.length > 0 ? `
+UNADDRESSED THOUGHTS (from brain dumps and conversations):
+${context.activeThoughts.map(t => `- "${t.content}" (${t.source}, ${t.createdAt})`).join('\n')}
+
+These are things the user has mentioned but hasn't turned into tasks yet. Reference them when relevant. If something keeps appearing, point it out: "You've mentioned [X] three times now but haven't made it a task. Is it time?"
+` : ''}
 ${context.currentEnergy ? `Current energy level: ${context.currentEnergy}` : ''}
 ${context.currentContext ? `Today's mode: ${context.currentContext}` : ''}`;
 }
@@ -126,8 +133,14 @@ ${items.map((item, i) => `${i + 1}. ${item}`).join('\n')}
 
 Based on what you know about me — my archetype, my patterns, my energy today — which ${itemCount} should I commit to right now? And briefly, why?
 
+CRITICAL formatting rules for the prioritized array:
+- Each entry must be a clean, concise task name — max 6 words, action-oriented
+- Start with a verb (Ship, Write, Fix, Build, Finish, Draft, Send, Design, Review, Plan)
+- Convert rambling dump text into a short task name
+- Examples: "I need to finish the technical update brief for tomorrow's meeting" → "Finish technical update brief", "figure out why the auth is broken on staging" → "Fix staging auth bug", "write up the Q2 marketing plan" → "Draft Q2 marketing plan"
+
 Respond with JSON only, no markdown:
-{"prioritized": ["concise action-oriented task name, max 8 words. Convert rambling dump text into a clean task. Example: 'I need to finish the technical update brief for tomorrow's meeting' becomes 'Finish technical update brief'"], "reasoning": "one paragraph why"}`,
+{"prioritized": ["max 6 word task name"], "reasoning": "one paragraph why"}`,
       },
     ],
   });

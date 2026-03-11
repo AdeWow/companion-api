@@ -127,7 +127,8 @@ export function generateMorningContext(
   patterns: UserPatterns,
   archetype: string,
   yesterdayTask?: string | null,
-  yesterdayStatus?: string | null
+  yesterdayStatus?: string | null,
+  activeThoughts?: Array<{ content: string; source: string; createdAt: string }> | null
 ): string | null {
   if (patterns.daysActive < 3) return null;
 
@@ -170,6 +171,22 @@ export function generateMorningContext(
   // Stale topics (Novelty Seeker)
   if (archetype === 'novelty_seeker' && patterns.staleTopics.length > 0) {
     options.push(`You haven't touched "${patterns.staleTopics[0].taskText}" in over a week. Still alive or ready to let it go?`);
+  }
+
+  // Yesterday's unaddressed thoughts
+  if (activeThoughts && activeThoughts.length > 0) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayThoughts = activeThoughts.filter((t) => {
+      const thoughtDate = t.createdAt.split('T')[0];
+      return thoughtDate === yesterdayStr;
+    });
+    if (yesterdayThoughts.length > 0) {
+      options.push(
+        `Yesterday you mentioned "${yesterdayThoughts[0].content}" but didn't make it a task. Still on your mind?`
+      );
+    }
   }
 
   if (options.length > 0) {
